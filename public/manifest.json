@@ -1,0 +1,14 @@
+{
+  "name": "AMBA",
+  "version": "0.0.1",
+  "manifest_version": 1,
+  "author": "Edmund Landgraf",
+  "icon": "/icon.svg",
+  "action": {
+    "title": "AMBA",
+    "icon": "/favicon.svg",
+    "popover": "/",
+    "height": 500,
+    "width": 400
+  }
+}
