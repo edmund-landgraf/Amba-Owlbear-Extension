@@ -1,9 +1,19 @@
+// All AMBA API calls in the Owlbear extension are routed through this file.
+// Keeping the base URL centralized makes it obvious where the local dev API
+// lives, and gives us one future place to swap localhost for production.
 const AMBA_BASE_URL = "http://localhost:5190";
 
+// Small shared JSON helper for AMBA endpoints.
+//
+// The extension is running inside Owlbear, so failed requests otherwise tend to
+// surface as vague browser errors. This helper tries to extract AMBA's `{error}`
+// payload first, then falls back to the HTTP status.
 async function getJson(path) {
   const response = await fetch(`${AMBA_BASE_URL}${path}`);
 
   if (!response.ok) {
+    // Some AMBA errors are JSON, but CORS/network/server errors may not be.
+    // The `.catch(() => null)` keeps the original failure path readable.
     const body = await response.json().catch(() => null);
     throw new Error(body?.error ?? `AMBA request failed: ${response.status}`);
   }
@@ -11,45 +21,73 @@ async function getJson(path) {
   return response.json();
 }
 
+// Dev-only module picker source.
+//
+// Owlbear does not know which AMBA module the user is looking at, so the
+// extension asks the local dev API for modules owned by `test-user@localhost`.
 export function getTestUserModules() {
   return getJson("/api/dev/test-user/modules");
 }
 
+// Fetch all PCs for the selected module. The API includes narratives and
+// artifacts because the importer may need character sheets or portrait metadata.
 export function getPcs(moduleId) {
   return getJson(`/api/modules/${encodeURIComponent(moduleId)}/pcs`);
 }
 
+// Short URL for the rendered character sheet PNG.
+//
+// This intentionally returns a URL instead of base64 image data. Owlbear scene
+// item validation rejects image URLs over 2048 characters, so data URLs are a
+// trap here. AMBA-hosted URLs stay short and valid.
 export function getPcSheetImageUrl(moduleId, pcId, color) {
   const url = new URL(
     `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/sheet.png`,
     AMBA_BASE_URL
   );
+  // The API uses this color as an accent when rendering the sheet image.
   if (color) url.searchParams.set("color", color);
   return url.href;
 }
 
+// Short URL for the generated 512x512 PC token SVG.
+//
+// The server draws the colored circle and first-letter label. The extension can
+// either reference this URL directly on scene items or rasterize it for Owlbear
+// asset uploads.
 export function getPcTokenImageUrl(moduleId, pcId, color) {
   const url = new URL(
     `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/token.svg`,
     AMBA_BASE_URL
   );
+  // The color query parameter lets the importer rotate token colors per PC.
   if (color) url.searchParams.set("color", color);
   return url.href;
 }
 
+// Short URL for a generated note backing image.
+//
+// This is currently less important now that note cards are shape+text items,
+// but it remains useful for experiments or image-backed note imports.
 export function getPcNoteImageUrl(moduleId, pcId, color) {
   const url = new URL(
     `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/note.svg`,
     AMBA_BASE_URL
   );
+  // The color query parameter matches the generated token color.
   if (color) url.searchParams.set("color", color);
   return url.href;
 }
 
+// Convert a relative AMBA asset path into an absolute URL that Owlbear can load.
+// Portrait metadata may come back as a relative path, while Owlbear item images
+// require absolute URLs.
 export function toAmbaUrl(path) {
   return new URL(path, AMBA_BASE_URL).href;
 }
 
+// Convenience URL for opening the selected AMBA module in the normal AMBA UI.
+// Not part of the current import flow, but useful for debugging/navigation.
 export function getModuleUrl(moduleId) {
   return `${AMBA_BASE_URL}/m/${encodeURIComponent(moduleId)}`;
 }
