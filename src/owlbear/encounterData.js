@@ -69,7 +69,16 @@ export function monsterCount(block) {
   return Number.isFinite(count) && count > 0 ? count : 1;
 }
 
-export function monsterTokenUrl(moduleId, block, color) {
+function appendTokenOptions(url, options) {
+  if (!options?.label && !options?.fontSize) return url;
+
+  const next = new URL(url);
+  if (options.label) next.searchParams.set("label", options.label);
+  if (options.fontSize) next.searchParams.set("fontSize", String(options.fontSize));
+  return next.href;
+}
+
+export function monsterTokenUrl(moduleId, block, color, options = {}) {
   const explicit = firstUrl(
     block.tokenUrl,
     block.tokenSvgUrl,
@@ -82,8 +91,8 @@ export function monsterTokenUrl(moduleId, block, color) {
     block.monster?.tokenSvgUrl,
     block.monster?.imageUrl
   );
-  if (explicit) return explicit;
+  if (explicit) return appendTokenOptions(explicit, options);
 
   const id = monsterId(block);
-  return id ? getMonsterTokenImageUrl(moduleId, id, color) : null;
+  return id ? getMonsterTokenImageUrl(moduleId, id, color, options) : null;
 }

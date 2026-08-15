@@ -20,6 +20,7 @@ import {
   NS,
 } from "./layout.js";
 import { rasterizedTokenInfo } from "./tokenImage.js";
+import { labelBaseForBlocks, labelFontSize, numberedLabel } from "./monsterLabels.js";
 
 async function buildMapItem({ moduleId, encounter, position }) {
   const url = mapUrl(encounter);
@@ -45,17 +46,23 @@ async function buildMapItem({ moduleId, encounter, position }) {
 async function buildMonsterTokenItems({ moduleId, encounter, origin }) {
   const items = [];
   const blocks = monsterBlocks(encounter);
+  const labelBases = labelBaseForBlocks(blocks, monsterName);
 
   for (const [blockIndex, block] of blocks.entries()) {
     const color = TOKEN_COLORS[blockIndex % TOKEN_COLORS.length];
-    const url = monsterTokenUrl(moduleId, block, color);
-    if (!url) continue;
-
     const name = monsterName(block);
     const count = monsterCount(block);
-    const token = await rasterizedTokenInfo(url, safeName(name, "monster-token"));
+    const labelBase = labelBases[blockIndex];
 
     for (let copy = 0; copy < count; copy += 1) {
+      const label = numberedLabel(labelBase, copy);
+      const url = monsterTokenUrl(moduleId, block, color, {
+        label,
+        fontSize: labelFontSize(label),
+      });
+      if (!url) continue;
+
+      const token = await rasterizedTokenInfo(url, safeName(`${name}-${label}`, "monster-token"));
       const position = gridPosition(items.length, {
         startX: origin.x + 256,
         startY: origin.y + 256,
@@ -65,9 +72,9 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin }) {
       });
       items.push(
         buildImage(token.image, token.grid)
-          .name(count > 1 ? `${name} ${copy + 1}` : name)
+          .name(`${label} ${name}`)
           .description(`AMBA monster token for ${name}`)
-          .plainText(name)
+          .plainText(label)
           .layer("CHARACTER")
           .position(position)
           .metadata({

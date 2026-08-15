@@ -82,12 +82,14 @@ export function getPcTokenImageUrl(moduleId, pcId, color) {
 // Best-effort conventional URL for generated NPC/monster SVG tokens. If AMBA
 // returns an explicit token URL in the encounter payload, the importer uses
 // that instead.
-export function getMonsterTokenImageUrl(moduleId, monsterId, color) {
+export function getMonsterTokenImageUrl(moduleId, monsterId, color, options = {}) {
   const url = new URL(
     `/api/modules/${encodeURIComponent(moduleId)}/npcs/${encodeURIComponent(monsterId)}/token.svg`,
     AMBA_BASE_URL
   );
   if (color) url.searchParams.set("color", color);
+  if (options.label) url.searchParams.set("label", options.label);
+  if (options.fontSize) url.searchParams.set("fontSize", String(options.fontSize));
   return url.href;
 }
 
