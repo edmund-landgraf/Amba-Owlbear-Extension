@@ -1,3 +1,5 @@
+import { devSmokeEncounter, devSmokeEncounters } from "./devSmokeEncounter.js";
+
 // All AMBA API calls in the Owlbear extension are routed through this file.
 // Keeping the base URL centralized makes it obvious where the local dev API
 // lives, and gives us one future place to swap localhost for production.
@@ -31,6 +33,16 @@ async function getJson(path) {
 
 function isMissingEndpoint(error) {
   return error instanceof Error && /AMBA request failed:\s*404|Cannot GET/i.test(error.message);
+}
+
+function isDevReadableFallback(error) {
+  return error instanceof Error && /AMBA request failed:\s*401|Not authenticated/i.test(error.message);
+}
+
+async function fallbackToDevSmoke(moduleId, error) {
+  const smoke = devSmokeEncounters(moduleId);
+  if (smoke && (isMissingEndpoint(error) || isDevReadableFallback(error))) return smoke;
+  throw error;
 }
 
 function flattenContainers(containers = []) {
@@ -131,12 +143,16 @@ export function getPcs(moduleId) {
 // payload flexible because AMBA encounter data is still evolving.
 export function getEncounters(moduleId) {
   return getJson(`/api/modules/${encodeURIComponent(moduleId)}/encounters`).catch(async (error) => {
-    if (!isMissingEndpoint(error)) throw error;
+    if (!isMissingEndpoint(error) && !isDevReadableFallback(error)) throw error;
 
-    const module = await getJson(`/api/modules/${encodeURIComponent(moduleId)}`);
-    return flattenContainers(module.containers)
-      .filter((container) => container.containerType?.key === "encounter")
-      .map(normalizeEncounterContainer);
+    try {
+      const containers = await getJson(`/api/modules/${encodeURIComponent(moduleId)}/containers`);
+      return flattenContainers(containers)
+        .filter((container) => container.containerType?.key === "encounter")
+        .map(normalizeEncounterContainer);
+    } catch (fallbackError) {
+      return fallbackToDevSmoke(moduleId, fallbackError);
+    }
   });
 }
 
@@ -146,11 +162,17 @@ export function getEncounter(moduleId, encounterId) {
   return getJson(
     `/api/modules/${encodeURIComponent(moduleId)}/encounters/${encodeURIComponent(encounterId)}`
   ).catch(async (error) => {
-    if (!isMissingEndpoint(error)) throw error;
+    if (!isMissingEndpoint(error) && !isDevReadableFallback(error)) throw error;
 
     const container = await getJson(
       `/api/modules/${encodeURIComponent(moduleId)}/containers/${encodeURIComponent(encounterId)}`
-    );
+    ).catch((fallbackError) => {
+      const smoke = devSmokeEncounter(moduleId, encounterId);
+      if (smoke && (isMissingEndpoint(fallbackError) || isDevReadableFallback(fallbackError))) {
+        return smoke;
+      }
+      throw fallbackError;
+    });
     return normalizeEncounterContainer(container);
   });
 }
