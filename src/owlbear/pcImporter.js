@@ -6,11 +6,13 @@ import {
   toAmbaUrl,
 } from "../amba/ambaApi.js";
 import { htmlToOwlbearRichText } from "../amba/htmlToOwlbearRichText.js";
-
-// Namespace prefix for every AMBA-owned Owlbear metadata key.
-// Owlbear metadata is shared by the room and by other extensions, so the prefix
-// prevents collisions and gives future AMBA tools a reliable way to find items.
-const NS = "com.adventuremakerbyact.owlbear";
+import {
+  fetchImageBlob,
+  imageInfoFromUrl,
+  rasterizeSvgFile,
+  safeName,
+} from "./imageUtils.js";
+import { getSceneBoundsForLayers, gridPosition, NS, rightOfBounds } from "./layout.js";
 
 // Default purple used when a flow does not provide a rotated color.
 const TOKEN_COLOR = "#7c3aed";
@@ -28,12 +30,6 @@ const NOTE_COLORS = [
   "#ff7a2f",
   "#2d6aef",
 ];
-
-// Make a filesystem-safe name for temporary browser File objects.
-// This does not change the Owlbear-visible PC name.
-function safeName(value) {
-  return value.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "character";
-}
 
 // Find the AMBA narrative that contains a character sheet.
 // Sheet-specific flows intentionally fail when this is missing; the main
@@ -59,45 +55,6 @@ function portraitPath(pc) {
   return artifact?.payload?.url ?? null;
 }
 
-// Fetch an image and wrap it as a browser File.
-// Scene items can use short URLs directly, but Owlbear asset uploads require
-// File/Blob inputs, so this helper supports both workflows.
-async function fetchImageBlob(url, filename) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Unable to load ${filename}: ${response.status}`);
-  const blob = await response.blob();
-  // Empty images fail later with vague decode errors, so fail here with the
-  // specific filename that caused the problem.
-  if (!blob.size) throw new Error(`${filename} was empty.`);
-  return new File([blob], filename, { type: blob.type || "image/png" });
-}
-
-// Decode an image blob just long enough to learn its pixel dimensions.
-// Owlbear's image builders require width/height and grid offset information.
-async function imageSizeFromBlob(blob, name) {
-  let bitmap;
-  try {
-    bitmap = await createImageBitmap(blob);
-  } catch {
-    throw new Error(`Unable to decode ${name} (${blob.type || "unknown type"}, ${blob.size ?? 0} bytes).`);
-  }
-  try { return { width: bitmap.width, height: bitmap.height }; }
-  finally { bitmap.close(); }
-}
-
-// Build the image/grid package Owlbear expects from a URL.
-// Important: `image.url` remains the short AMBA URL. We do not use data URLs,
-// because Owlbear rejects item image URLs longer than 2048 characters.
-async function imageInfoFromUrl(url, filename, fallbackType = "image/png") {
-  const file = await fetchImageBlob(url, filename);
-  const size = await imageSizeFromBlob(file, filename);
-  return {
-    file,
-    image: { ...size, url, mime: file.type || fallbackType },
-    grid: { dpi: Math.max(size.width, size.height), offset: { x: size.width / 2, y: size.height / 2 } },
-  };
-}
-
 // Resolve the token image for a PC.
 // Prefer real portrait art when present and decodable; otherwise use the AMBA
 // generated 512x512 colored first-letter token.
@@ -120,46 +77,6 @@ async function tokenInfo(moduleId, pc, color = TOKEN_COLOR) {
     image: { width: 512, height: 512, url, mime: "image/svg+xml" },
     grid: { dpi: 512, offset: { x: 256, y: 256 } },
   };
-}
-
-// Rasterize a generated SVG into PNG for Owlbear's Character asset library.
-// The current-scene import can reference SVG URLs, but asset uploads are more
-// reliable as PNG files.
-function rasterizeSvgFile(svgFile, filename, width, height) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(svgFile);
-
-    image.onload = () => {
-      try {
-        // Canvas gives us a client-side conversion without adding a server image
-        // endpoint or dependency just for asset-library uploads.
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext("2d");
-        context.drawImage(image, 0, 0, width, height);
-        canvas.toBlob((blob) => {
-          URL.revokeObjectURL(objectUrl);
-          if (!blob) {
-            reject(new Error(`Unable to render ${filename}`));
-            return;
-          }
-          resolve(new File([blob], filename, { type: "image/png" }));
-        }, "image/png");
-      } catch (error) {
-        URL.revokeObjectURL(objectUrl);
-        reject(error);
-      }
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error(`Unable to decode ${filename}`));
-    };
-
-    image.src = objectUrl;
-  });
 }
 
 // Build one Character-library upload for a PC token.
@@ -463,16 +380,21 @@ export async function addPcTokensAndNotesToCurrentScene({ moduleId, pcs }) {
 // Build one rendered character-sheet PNG item.
 // These snapshots are placed below the token/note prototype area so they do not
 // overlap the root token layout.
-async function buildPcSheetImageItem({ moduleId, pc, index = 0 }) {
+async function buildPcSheetImageItem({ moduleId, pc, index = 0, origin = { x: 3600, y: 200 } }) {
   const snapshot = await snapshotInfo(moduleId, pc);
   const metadata = { [`${NS}/moduleId`]: moduleId, [`${NS}/pcId`]: pc.id };
-  const row = Math.floor(index / 3);
-  const column = index % 3;
+  const position = gridPosition(index, {
+    startX: origin.x,
+    startY: origin.y,
+    columns: 2,
+    gapX: 1100,
+    gapY: 1500,
+  });
   return buildImage(snapshot.image, snapshot.grid)
     .name(`${pc.name} Character Sheet`)
     .description(`Rendered AMBA character sheet for ${pc.name}`)
     .layer("NOTE")
-    .position({ x: 200 + column * 950, y: 1000 + row * 1400 })
+    .position(position)
     .metadata({ ...metadata, [`${NS}/kind`]: "character-sheet-snapshot" })
     .build();
 }
@@ -483,8 +405,11 @@ async function buildPcSheetImageItem({ moduleId, pc, index = 0 }) {
 export async function addPcSheetImagesToCurrentScene({ moduleId, pcs }) {
   if (!pcs.length) throw new Error("No PCs found to import.");
 
+  const mapBounds = await getSceneBoundsForLayers(["MAP"]);
+  const origin = rightOfBounds(mapBounds, 1000);
+
   const results = await Promise.allSettled(
-    pcs.map((pc, index) => buildPcSheetImageItem({ moduleId, pc, index }))
+    pcs.map((pc, index) => buildPcSheetImageItem({ moduleId, pc, index, origin }))
   );
   const items = results
     .filter((result) => result.status === "fulfilled")

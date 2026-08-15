@@ -22,6 +22,16 @@ export function renderAppShell() {
         <div id="pcList"></div>
         <p id="importStatus" aria-live="polite"></p>
       </section>
+
+      <section class="panel">
+        <h2>AMBA Encounters</h2>
+        <label class="field-label" for="encounterPicker">Encounter</label>
+        <select id="encounterPicker" disabled>
+          <option>Select a module first</option>
+        </select>
+        <button id="importEncounter" disabled>Import encounter</button>
+        <p id="encounterStatus" aria-live="polite"></p>
+      </section>
     </main>
   `;
 }

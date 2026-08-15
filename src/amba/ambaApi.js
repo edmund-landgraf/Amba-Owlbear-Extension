@@ -35,6 +35,20 @@ export function getPcs(moduleId) {
   return getJson(`/api/modules/${encodeURIComponent(moduleId)}/pcs`);
 }
 
+// Fetch encounter summaries for the selected module. The extension keeps the
+// payload flexible because AMBA encounter data is still evolving.
+export function getEncounters(moduleId) {
+  return getJson(`/api/modules/${encodeURIComponent(moduleId)}/encounters`);
+}
+
+// Fetch one full encounter, including map and monster block details when AMBA
+// has them available.
+export function getEncounter(moduleId, encounterId) {
+  return getJson(
+    `/api/modules/${encodeURIComponent(moduleId)}/encounters/${encodeURIComponent(encounterId)}`
+  );
+}
+
 // Short URL for the rendered character sheet PNG.
 //
 // This intentionally returns a URL instead of base64 image data. Owlbear scene
@@ -61,6 +75,18 @@ export function getPcTokenImageUrl(moduleId, pcId, color) {
     AMBA_BASE_URL
   );
   // The color query parameter lets the importer rotate token colors per PC.
+  if (color) url.searchParams.set("color", color);
+  return url.href;
+}
+
+// Best-effort conventional URL for generated NPC/monster SVG tokens. If AMBA
+// returns an explicit token URL in the encounter payload, the importer uses
+// that instead.
+export function getMonsterTokenImageUrl(moduleId, monsterId, color) {
+  const url = new URL(
+    `/api/modules/${encodeURIComponent(moduleId)}/npcs/${encodeURIComponent(monsterId)}/token.svg`,
+    AMBA_BASE_URL
+  );
   if (color) url.searchParams.set("color", color);
   return url.href;
 }

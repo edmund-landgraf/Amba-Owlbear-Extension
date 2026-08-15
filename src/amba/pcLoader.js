@@ -1,4 +1,5 @@
-import { getPcs, getTestUserModules } from "./ambaApi.js";
+import { getEncounter, getEncounters, getPcs, getTestUserModules } from "./ambaApi.js";
+import { addEncounterToCurrentScene } from "../owlbear/encounterImporter.js";
 import { addPcSheetImagesToCurrentScene, addPcTokensAndNotesToCurrentScene } from "../owlbear/pcImporter.js";
 
 // Convert unknown thrown values into a user-visible string.
@@ -47,6 +48,16 @@ function renderPcButtons(container, pcs) {
   }
 }
 
+function encounterLabel(encounter) {
+  const title = encounter.title ?? encounter.name ?? "Untitled encounter";
+  const monsters = encounter._count?.monsters ?? encounter.monsterCount ?? encounter.monsters?.length;
+  return monsters ? `${title} (${monsters} monsters)` : title;
+}
+
+function encounterKey(encounter, index) {
+  return encounter.id ?? encounter.encounterId ?? encounter.slug ?? String(index);
+}
+
 // Wire the AMBA PC panel after Owlbear has loaded the app shell.
 //
 // This function owns browser UI state: loading modules, enabling buttons,
@@ -58,13 +69,60 @@ export async function wirePcLoader() {
   const modulePicker = document.getElementById("modulePicker");
   const loadPcs = document.getElementById("loadPcs");
   const importSheetImages = document.getElementById("importSheetImages");
+  const encounterPicker = document.getElementById("encounterPicker");
+  const importEncounter = document.getElementById("importEncounter");
   const pcList = document.getElementById("pcList");
   const importStatus = document.getElementById("importStatus");
+  const encounterStatus = document.getElementById("encounterStatus");
 
   // The module list is loaded once on startup and reused by the controls.
   // The selected module ID lives in the <select>; this array preserves the
   // rest of the module metadata if we need it later.
   let modules = [];
+  let encounters = [];
+
+  async function loadEncountersForSelectedModule() {
+    const moduleId = modulePicker.value;
+    encounterPicker.disabled = true;
+    importEncounter.disabled = true;
+    encounterPicker.replaceChildren();
+    const loading = document.createElement("option");
+    loading.textContent = moduleId ? "Loading encounters..." : "Select a module first";
+    encounterPicker.append(loading);
+    encounterStatus.classList.remove("error");
+    encounterStatus.textContent = "";
+
+    if (!moduleId) return;
+
+    try {
+      encounters = await getEncounters(moduleId);
+      encounterPicker.replaceChildren();
+
+      if (!encounters.length) {
+        const empty = document.createElement("option");
+        empty.textContent = "No encounters found";
+        encounterPicker.append(empty);
+        return;
+      }
+
+      for (const [index, encounter] of encounters.entries()) {
+        const option = document.createElement("option");
+        option.value = encounterKey(encounter, index);
+        option.textContent = encounterLabel(encounter);
+        encounterPicker.append(option);
+      }
+
+      encounterPicker.disabled = false;
+      importEncounter.disabled = false;
+    } catch (error) {
+      encounterPicker.replaceChildren();
+      const failed = document.createElement("option");
+      failed.textContent = "Unable to load encounters";
+      encounterPicker.append(failed);
+      encounterStatus.textContent = errorMessage(error, "Unable to load encounters.");
+      encounterStatus.classList.add("error");
+    }
+  }
 
   // Main import button: fetch PCs, list their names, then drop token+note pairs
   // directly into the currently open Owlbear scene.
@@ -137,6 +195,38 @@ export async function wirePcLoader() {
     }
   });
 
+  importEncounter.addEventListener("click", async () => {
+    const moduleId = modulePicker.value;
+    const selectedEncounterId = encounterPicker.value;
+    if (!moduleId || !selectedEncounterId) return;
+
+    encounterStatus.classList.remove("error");
+    encounterStatus.textContent = "Importing encounter...";
+
+    try {
+      importEncounter.disabled = true;
+      const selectedSummary = encounters.find(
+        (encounter, index) => encounterKey(encounter, index) === selectedEncounterId
+      );
+      const fullEncounterId = selectedSummary?.id ?? selectedSummary?.encounterId ?? selectedSummary?.slug;
+      const encounter = fullEncounterId
+        ? await getEncounter(moduleId, fullEncounterId)
+        : selectedSummary;
+      if (!encounter) throw new Error("Select an encounter to import.");
+      const result = await addEncounterToCurrentScene({ moduleId, encounter });
+      encounterStatus.textContent = `Imported ${result.mapImported ? "1 map and " : ""}${result.monsterTokensImported} monster token${result.monsterTokensImported === 1 ? "" : "s"}.`;
+    } catch (error) {
+      encounterStatus.textContent = errorMessage(error, "Unable to import encounter.");
+      encounterStatus.classList.add("error");
+    } finally {
+      importEncounter.disabled = encounterPicker.disabled || !encounterPicker.value;
+    }
+  });
+
+  modulePicker.addEventListener("change", () => {
+    loadEncountersForSelectedModule();
+  });
+
   try {
     // Populate the module picker from the dev test-user endpoint. This keeps
     // the extension usable inside Owlbear without doing AMBA OAuth inside the
@@ -173,6 +263,7 @@ export async function wirePcLoader() {
     modulePicker.disabled = false;
     loadPcs.disabled = false;
     importSheetImages.disabled = false;
+    await loadEncountersForSelectedModule();
   } catch (error) {
     // Module loading is the one startup failure that blocks all PC imports.
     // Put the explanation in the PC list area where the user is already looking.
