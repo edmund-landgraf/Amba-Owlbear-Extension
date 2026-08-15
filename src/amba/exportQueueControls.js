@@ -2,10 +2,12 @@ import {
   completeOwlbearExport,
   failOwlbearExport,
   getEncounter,
+  getPcs,
   getOwlbearExportQueue,
 } from "./ambaApi.js";
 import { addEncounterToCurrentScene } from "../owlbear/encounterImporter.js";
 import { encounterTitle } from "../owlbear/encounterData.js";
+import { addPcTokensAndNotesToCurrentScene } from "../owlbear/pcImporter.js";
 import { clearCurrentScene } from "../owlbear/sceneItems.js";
 import { errorMessage } from "./uiHelpers.js";
 
@@ -68,9 +70,32 @@ export function wireExportQueueControls({
   clearAndImportQueuedExports,
   modulePicker,
   encounterPicker,
+  optionImportMap,
+  optionImportMonsterTokens,
+  optionImportStatCards,
+  optionIncludePcTokens,
   encounterStatus,
   encounterDiagnostics,
 }) {
+  function exportOptions() {
+    return {
+      importMap: optionImportMap?.checked ?? true,
+      importMonsterTokens: optionImportMonsterTokens?.checked ?? true,
+      importStatCards: optionImportStatCards?.checked ?? true,
+      includePcTokens: optionIncludePcTokens?.checked ?? false,
+    };
+  }
+
+  function optionsForQueueItem(item) {
+    const queued = item.exportOptions ?? item.options ?? {};
+    return {
+      ...exportOptions(),
+      ...queued,
+      importStatCards: queued.importStatCards ?? queued.importMonsterStatCards ?? exportOptions().importStatCards,
+      includePcTokens: queued.includePcTokens ?? queued.importPcTokens ?? exportOptions().includePcTokens,
+    };
+  }
+
   async function importQueue({ clearScene = false } = {}) {
     encounterStatus.classList.remove("error");
     encounterStatus.textContent = clearScene
@@ -104,18 +129,24 @@ export function wireExportQueueControls({
       let mapCount = 0;
       let statCardCount = 0;
       let preservedCount = 0;
+      let pcCount = 0;
 
       for (const [index, item] of items.entries()) {
         const id = queueItemId(item, index);
         try {
           const moduleId = queueModuleId(item);
           const encounter = await resolveEncounter(item);
-          const result = await addEncounterToCurrentScene({ moduleId, encounter });
+          const options = optionsForQueueItem(item);
+          const result = await addEncounterToCurrentScene({ moduleId, encounter, options });
           imported += 1;
           tokenCount += result.monsterTokensImported;
           statCardCount += result.statCardsImported ?? 0;
           preservedCount += (result.mapSkipped ? 1 : 0) + (result.monsterTokensSkipped ?? 0);
           if (result.mapImported) mapCount += 1;
+          if (options.includePcTokens) {
+            const pcs = await getPcs(moduleId);
+            if (pcs.length) pcCount += await addPcTokensAndNotesToCurrentScene({ moduleId, pcs });
+          }
           if (!item.devFallback) {
             await completeOwlbearExport(id, {
               encounter: encounterTitle(encounter),
@@ -131,7 +162,7 @@ export function wireExportQueueControls({
       }
 
       const clearSummary = clearScene ? `Cleared ${cleared} item${cleared === 1 ? "" : "s"}. ` : "";
-      encounterStatus.textContent = `${clearSummary}Imported ${imported} queued export${imported === 1 ? "" : "s"}: ${mapCount} map${mapCount === 1 ? "" : "s"}, ${tokenCount} monster token${tokenCount === 1 ? "" : "s"}, ${statCardCount} stat card item${statCardCount === 1 ? "" : "s"}${preservedCount ? `; preserved ${preservedCount} existing item${preservedCount === 1 ? "" : "s"}` : ""}${failed ? `; ${failed} failed.` : "."}`;
+      encounterStatus.textContent = `${clearSummary}Imported ${imported} queued export${imported === 1 ? "" : "s"}: ${mapCount} map${mapCount === 1 ? "" : "s"}, ${tokenCount} monster token${tokenCount === 1 ? "" : "s"}, ${statCardCount} stat card item${statCardCount === 1 ? "" : "s"}${pcCount ? `, ${pcCount} PC token${pcCount === 1 ? "" : "s"}` : ""}${preservedCount ? `; preserved ${preservedCount} existing item${preservedCount === 1 ? "" : "s"}` : ""}${failed ? `; ${failed} failed.` : "."}`;
       if (encounterDiagnostics) {
         encounterDiagnostics.textContent = "Queue import uses AMBA metadata as an upsert key; existing imported tokens are left where the user dragged them.";
       }

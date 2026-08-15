@@ -1,6 +1,8 @@
-import { getEncounter, getEncounters } from "./ambaApi.js";
+import { getEncounter, getEncounters, getPcs } from "./ambaApi.js";
+import { analyzeEncounterForExport, renderEncounterAnalysis } from "./encounterAnalysis.js";
 import { addEncounterToCurrentScene } from "../owlbear/encounterImporter.js";
 import { saveEncounterPlacementsToAmba } from "../owlbear/placementSync.js";
+import { addPcTokensAndNotesToCurrentScene } from "../owlbear/pcImporter.js";
 import { encounterImportSummary, encounterKey, encounterLabel, errorMessage } from "./uiHelpers.js";
 
 export function wireEncounterControls({
@@ -8,10 +10,25 @@ export function wireEncounterControls({
   encounterPicker,
   importEncounter,
   saveEncounterPlacements,
+  optionImportMap,
+  optionImportMonsterTokens,
+  optionImportStatCards,
+  optionIncludePcTokens,
   encounterStatus,
   encounterDiagnostics,
 }) {
   let encounters = [];
+  let loadedEncounter = null;
+  let analysisRequestId = 0;
+
+  function exportOptions() {
+    return {
+      importMap: optionImportMap?.checked ?? true,
+      importMonsterTokens: optionImportMonsterTokens?.checked ?? true,
+      importStatCards: optionImportStatCards?.checked ?? true,
+      includePcTokens: optionIncludePcTokens?.checked ?? false,
+    };
+  }
 
   async function selectedEncounter() {
     const moduleId = modulePicker.value;
@@ -23,6 +40,30 @@ export function wireEncounterControls({
     );
     const fullEncounterId = selectedSummary?.id ?? selectedSummary?.encounterId ?? selectedSummary?.slug;
     return fullEncounterId ? getEncounter(moduleId, fullEncounterId) : selectedSummary;
+  }
+
+  async function analyzeSelectedEncounter() {
+    const requestId = ++analysisRequestId;
+    loadedEncounter = null;
+    if (!encounterPicker.value || encounterPicker.disabled) return;
+
+    if (encounterDiagnostics) {
+      encounterDiagnostics.textContent = "Loading encounter export details...";
+    }
+
+    try {
+      const encounter = await selectedEncounter();
+      if (!encounter || requestId !== analysisRequestId) return;
+      loadedEncounter = encounter;
+      const analysis = await analyzeEncounterForExport(encounter);
+      if (requestId !== analysisRequestId) return;
+      renderEncounterAnalysis(encounterDiagnostics, analysis, exportOptions());
+    } catch (error) {
+      if (requestId !== analysisRequestId) return;
+      if (encounterDiagnostics) {
+        encounterDiagnostics.textContent = errorMessage(error, "Unable to analyze encounter.");
+      }
+    }
   }
 
   async function loadEncountersForSelectedModule() {
@@ -62,6 +103,7 @@ export function wireEncounterControls({
       encounterPicker.disabled = false;
       importEncounter.disabled = false;
       if (saveEncounterPlacements) saveEncounterPlacements.disabled = false;
+      await analyzeSelectedEncounter();
     } catch (error) {
       encounterPicker.replaceChildren();
       const failed = document.createElement("option");
@@ -82,11 +124,20 @@ export function wireEncounterControls({
 
     try {
       importEncounter.disabled = true;
-      const encounter = await selectedEncounter();
+      const encounter = loadedEncounter ?? (await selectedEncounter());
       if (!encounter) throw new Error("Select an encounter to import.");
 
-      const result = await addEncounterToCurrentScene({ moduleId, encounter });
+      const options = exportOptions();
+      const result = await addEncounterToCurrentScene({ moduleId, encounter, options });
+      let pcCount = 0;
+      if (options.includePcTokens) {
+        const pcs = await getPcs(moduleId);
+        if (pcs.length) pcCount = await addPcTokensAndNotesToCurrentScene({ moduleId, pcs });
+      }
       encounterStatus.textContent = encounterImportSummary(result);
+      if (pcCount) {
+        encounterStatus.textContent += ` Added ${pcCount} PC token${pcCount === 1 ? "" : "s"}.`;
+      }
       if (encounterDiagnostics) {
         encounterDiagnostics.textContent = `Scene metadata updated for AMBA encounter ${encounter.id ?? encounter.encounterId ?? encounterPicker.value}. Re-import preserves existing AMBA token positions.`;
       }
@@ -107,7 +158,7 @@ export function wireEncounterControls({
 
     try {
       saveEncounterPlacements.disabled = true;
-      const encounter = await selectedEncounter();
+      const encounter = loadedEncounter ?? (await selectedEncounter());
       if (!encounter) throw new Error("Select an encounter before saving placements.");
 
       const count = await saveEncounterPlacementsToAmba({ moduleId, encounter });
@@ -126,6 +177,18 @@ export function wireEncounterControls({
   modulePicker.addEventListener("change", () => {
     loadEncountersForSelectedModule();
   });
+
+  encounterPicker.addEventListener("change", () => {
+    void analyzeSelectedEncounter();
+  });
+
+  for (const option of [optionImportMap, optionImportMonsterTokens, optionImportStatCards, optionIncludePcTokens]) {
+    option?.addEventListener("change", () => {
+      if (loadedEncounter) {
+        void analyzeSelectedEncounter();
+      }
+    });
+  }
 
   return { loadEncountersForSelectedModule };
 }

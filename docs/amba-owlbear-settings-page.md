@@ -165,6 +165,26 @@ Queue item minimum shape:
 }
 ```
 
+Queue items should include export options when the user adds an encounter from AMBA:
+
+```json
+{
+  "id": "queue-item-id",
+  "moduleId": "module-id",
+  "encounterId": "encounter-id",
+  "exportOptions": {
+    "importMap": true,
+    "importMonsterTokens": true,
+    "importMonsterStatCards": true,
+    "includePcTokens": false,
+    "clearSceneBeforeImport": false,
+    "saveTokenPlacements": "manual"
+  }
+}
+```
+
+The extension can still expose local overrides, but AMBA should be the durable owner of defaults and queued intent.
+
 Required endpoints:
 
 ```text
@@ -193,6 +213,59 @@ These are user/module-level options that can be safely changed from the AMBA UI.
 | Save token placements | Yes | `manual` | Manual button first; automatic sync later if proven safe. |
 | Token label style | Yes | `compact` | Example labels: `Gb1`, `Gb2`, `Gi1`. |
 | Token staging columns | Yes | `8` | Controls dump layout before GM drags tokens. |
+
+### Encounter Export Analysis
+
+When AMBA loads an encounter in its own UI, the Owlbear panel should show whether the encounter is ready for export.
+
+Recommended fields:
+
+| Field | Source | Notes |
+|---|---|---|
+| Has map | Encounter map artifact | Boolean. |
+| Map URL | Map artifact payload | Must be reachable from Owlbear browser context. |
+| Map dimensions | Server image probe | Width/height in pixels. |
+| Grid cell size | Map metadata | AMBA maps use 1 square = 5 ft. |
+| Grid dimensions | Map metadata or derived | Example: `24 x 18 squares`. |
+| Monster block count | Encounter artifacts | Count of `monster_block` artifacts. |
+| Planned monster tokens | Sum quantities | Example: two goblins + one rat = 3 tokens. |
+| Export warnings | Validation | Missing map URL, missing CORS, missing monster blocks, unknown grid size. |
+
+Suggested endpoint:
+
+```text
+GET /api/modules/:moduleId/owlbear/encounters/:encounterId/export-analysis
+```
+
+Suggested response:
+
+```json
+{
+  "encounterId": "encounter-id",
+  "title": "Guard Post",
+  "map": {
+    "present": true,
+    "ready": true,
+    "artifactId": "map-artifact-id",
+    "url": "/uploads/module-id/map.png",
+    "width": 2048,
+    "height": 1536,
+    "grid": {
+      "cellSize": 128,
+      "columns": 16,
+      "rows": 12,
+      "scale": "5 ft"
+    }
+  },
+  "monsterBlocks": {
+    "count": 2,
+    "plannedTokens": 5
+  },
+  "warnings": []
+}
+```
+
+The extension now performs a browser-side version of this analysis when an encounter is selected. AMBA should eventually provide the same facts server-side so the AMBA page and Owlbear extension agree before export.
 
 Import mode options:
 
@@ -450,6 +523,11 @@ Import PC tokens:        [ ]
 Save placements:         [Manual v]
 Token label style:       [Compact v]
 Token staging columns:   [8]
+
+[Selected Encounter Export Analysis]
+Map:                     Ready, 2048 x 1536 PNG, 128px/square, 1 square = 5 ft
+Monster blocks:          2 blocks, 5 planned tokens
+Warnings:                None
 
 [Placement Sync]
 Endpoint:                Available

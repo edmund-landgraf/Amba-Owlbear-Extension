@@ -47,6 +47,19 @@ select {
   width: 100%;
 }
 
+.option-group {
+  border: 1px solid #bbb;
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px 10px;
+}
+
+.option-group legend {
+  font-weight: 700;
+  padding: 0 4px;
+}
+
 #pcList {
   display: grid;
   gap: 6px;
@@ -55,8 +68,14 @@ select {
 
 #encounterDiagnostics {
   color: #555;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.35;
   margin-top: 8px;
+}
+
+.encounter-analysis {
+  display: grid;
+  gap: 4px;
 }
 
 .error {

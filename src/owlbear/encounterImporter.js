@@ -205,31 +205,43 @@ function buildMonsterStatCardItems({ moduleId, encounter, origin, importedItems 
   return items;
 }
 
-export async function addEncounterToCurrentScene({ moduleId, encounter }) {
+export async function addEncounterToCurrentScene({ moduleId, encounter, options = {} }) {
+  const importOptions = {
+    importMap: true,
+    importMonsterTokens: true,
+    importStatCards: true,
+    ...options,
+  };
   const items = [];
   const id = encounterId(encounter);
   const importedItems = await getImportedEncounterItems(moduleId, id);
   const occupiedBounds = await getSceneBoundsForLayers(["MAP", "CHARACTER"]);
-  const map = await buildMapItem({ moduleId, encounter, occupiedBounds, importedItems });
+  const map = importOptions.importMap
+    ? await buildMapItem({ moduleId, encounter, occupiedBounds, importedItems })
+    : null;
   if (map?.item) items.push(map.item);
 
   const stagingBounds = combineBounds(occupiedBounds, map?.bounds);
   const monsterOrigin = belowBounds(stagingBounds, 600);
-  const monsterResult = await buildMonsterTokenItems({
-    moduleId,
-    encounter,
-    origin: monsterOrigin,
-    importedItems,
-  });
+  const monsterResult = importOptions.importMonsterTokens
+    ? await buildMonsterTokenItems({
+        moduleId,
+        encounter,
+        origin: monsterOrigin,
+        importedItems,
+      })
+    : { items: [], skipped: 0 };
   items.push(...monsterResult.items);
 
   const cardOrigin = belowBounds(combineBounds(stagingBounds, { min: monsterOrigin, max: monsterOrigin }), 1200);
-  const statCardItems = buildMonsterStatCardItems({
-    moduleId,
-    encounter,
-    origin: cardOrigin,
-    importedItems,
-  });
+  const statCardItems = importOptions.importStatCards
+    ? buildMonsterStatCardItems({
+        moduleId,
+        encounter,
+        origin: cardOrigin,
+        importedItems,
+      })
+    : [];
   items.push(...statCardItems);
 
   if (!items.length && !importedItems.length) {

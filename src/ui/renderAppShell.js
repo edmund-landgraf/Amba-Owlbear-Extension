@@ -29,6 +29,13 @@ export function renderAppShell() {
         <select id="encounterPicker" disabled>
           <option>Select a module first</option>
         </select>
+        <fieldset class="option-group">
+          <legend>Export Options</legend>
+          <label><input id="optionImportMap" type="checkbox" checked /> Push map</label>
+          <label><input id="optionImportMonsterTokens" type="checkbox" checked /> Push monster tokens</label>
+          <label><input id="optionImportStatCards" type="checkbox" checked /> Push monster stat cards</label>
+          <label><input id="optionIncludePcTokens" type="checkbox" /> Push PC tokens</label>
+        </fieldset>
         <button id="importEncounter" disabled>Import encounter</button>
         <button id="importQueuedExports">Import queued exports</button>
         <button id="clearAndImportQueuedExports">Clear scene and import queued exports</button>

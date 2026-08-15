@@ -20,6 +20,10 @@ export async function wirePcLoader() {
   const importQueuedExports = document.getElementById("importQueuedExports");
   const clearAndImportQueuedExports = document.getElementById("clearAndImportQueuedExports");
   const saveEncounterPlacements = document.getElementById("saveEncounterPlacements");
+  const optionImportMap = document.getElementById("optionImportMap");
+  const optionImportMonsterTokens = document.getElementById("optionImportMonsterTokens");
+  const optionImportStatCards = document.getElementById("optionImportStatCards");
+  const optionIncludePcTokens = document.getElementById("optionIncludePcTokens");
   const pcList = document.getElementById("pcList");
   const importStatus = document.getElementById("importStatus");
   const encounterStatus = document.getElementById("encounterStatus");
@@ -33,6 +37,10 @@ export async function wirePcLoader() {
     encounterPicker,
     importEncounter,
     saveEncounterPlacements,
+    optionImportMap,
+    optionImportMonsterTokens,
+    optionImportStatCards,
+    optionIncludePcTokens,
     encounterStatus,
     encounterDiagnostics,
   });
@@ -41,6 +49,10 @@ export async function wirePcLoader() {
     clearAndImportQueuedExports,
     modulePicker,
     encounterPicker,
+    optionImportMap,
+    optionImportMonsterTokens,
+    optionImportStatCards,
+    optionIncludePcTokens,
     encounterStatus,
     encounterDiagnostics,
   });
