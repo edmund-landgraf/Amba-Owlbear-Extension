@@ -2,6 +2,8 @@
 
 This guide covers the local development path for loading the AMBA Owlbear extension into Owlbear Rodeo.
 
+For the always-on Linux production hosting plan, see [linux-production-hosting.md](./linux-production-hosting.md).
+
 ## Prerequisites
 
 - AMBA is running locally at `http://localhost:5190`.

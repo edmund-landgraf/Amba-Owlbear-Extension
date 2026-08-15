@@ -938,6 +938,8 @@ The current project is a small Vite app.
 
 For Owlbear loading instructions, see [loading-extension.md](./loading-extension.md).
 
+For the always-on Linux production hosting plan, see [linux-production-hosting.md](./linux-production-hosting.md).
+
 Common commands:
 
 ```bash
