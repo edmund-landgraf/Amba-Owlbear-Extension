@@ -10,13 +10,13 @@ Owlbear Rodeo 1.0 and the current Owlbear Rodeo platform have different integrat
 
 Owlbear Rodeo 1.0, now published as `owlbear-rodeo-legacy`, has source code available for personal, non-commercial, private use. Its README describes it as the source for the original 1.0 application and includes instructions for local/Docker hosting. It also says the legacy code is not maintained or supported because Owlbear moved to the newer platform.
 
-Modern Owlbear Rodeo is not integrated by replacing or self-hosting the core application in this repo. The current documented integration path is an Owlbear extension: a separately hosted web app with a `manifest.json` that Owlbear loads into its UI, usually as an iframe popover, tool, context menu, background page, or related extension surface.
+Modern Owlbear Rodeo is not integrated by replacing or self-hosting the core application in this repo. As far as we can verify, the Owlbear Rodeo 2.x application source is not publicly available for self-hosting or modification. The current documented integration path is an Owlbear extension: a separately hosted web app with a `manifest.json` that Owlbear loads into its UI, usually as an iframe popover, tool, context menu, background page, or related extension surface.
 
 So the correction is slightly nuanced:
 
-- Correct: for modern Owlbear Rodeo, the supported/practical way for AMBA to integrate is an extension.
+- Correct: for modern Owlbear Rodeo 2.x, the supported/practical way for AMBA to integrate is an extension.
 - Also correct: Owlbear Rodeo 1.0 legacy can be self-hosted under its legacy terms.
-- Not established from current official docs: a supported self-hosting path for replacing or modifying the modern Owlbear Rodeo core.
+- Not currently known or documented: a public source/self-hosting path for replacing or modifying the modern Owlbear Rodeo 2.x core.
 
 Reviewed sources:
 
@@ -51,6 +51,162 @@ flowchart LR
   SDK --> Assets["Owlbear Asset Library\nfolder picker flows"]
   AMBA --> Images["AMBA Hosted Images\nmaps, sheets, SVG tokens"]
 ```
+
+## Map, Grid, Token, And Scene Strategy
+
+AMBA can and should push maps, tokens, and encounter scenes, but the important design detail is that map scale and creature token scale are not the same concept.
+
+### Map Scale
+
+AMBA encounter maps are authored as:
+
+```text
+1 square = 5 ft
+```
+
+That lines up with the common tactical grid model used by D&D and Pathfinder. In Owlbear, the scene grid should therefore use:
+
+```text
+gridScale("5 ft")
+gridType("SQUARE")
+```
+
+The image itself still needs resize/grid math so Owlbear knows how many image pixels correspond to one grid square. Owlbear image builders represent that through image-grid `dpi`, which is effectively "image pixels per scene grid cell" for our purposes.
+
+If AMBA knows the map dimensions in squares:
+
+```text
+mapPixelWidth = rendered map image width in pixels
+mapPixelHeight = rendered map image height in pixels
+mapSquaresWide = AMBA map width in 5 ft squares
+mapSquaresHigh = AMBA map height in 5 ft squares
+
+dpiX = mapPixelWidth / mapSquaresWide
+dpiY = mapPixelHeight / mapSquaresHigh
+dpi = dpiX, assuming square pixels and consistent map export
+```
+
+The importer should validate that `dpiX` and `dpiY` are close. If they differ meaningfully, the map export metadata or raster size is inconsistent and the user should see a warning.
+
+For SVG maps authored in square units, AMBA should rasterize them at a chosen target pixels-per-square value before sending to Owlbear. For example:
+
+```text
+targetPixelsPerSquare = 140
+rasterWidth = mapSquaresWide * targetPixelsPerSquare
+rasterHeight = mapSquaresHigh * targetPixelsPerSquare
+dpi = targetPixelsPerSquare
+```
+
+This keeps the math straightforward: every AMBA square becomes one Owlbear grid cell, and Owlbear's grid scale labels each cell as 5 ft.
+
+### Creature Token Scale
+
+Rules check:
+
+- Pathfinder 2e: Small and Medium creatures occupy 5 feet, Large creatures occupy 10 feet, Huge creatures occupy 15 feet, and Gargantuan creatures occupy 20 feet or more.
+- D&D 5e/2024 follows the same broad grid pattern: Small and Medium are 5 ft by 5 ft, Large is 10 ft by 10 ft, Huge is 15 ft by 15 ft, and Gargantuan is 20 ft by 20 ft or larger.
+
+That means a Medium humanoid occupying a 5 ft square is rules-correct. The subtle issue is visual interpretation: the 5 ft square is the creature's combat space, not literal shoulder width. A Medium humanoid token should occupy one grid square, but the drawn humanoid inside the token art should usually have visual padding.
+
+Recommended token sizing:
+
+```text
+Tiny       = 0.5 square, or 1 square with a small visual marker if we want simpler UX
+Small      = 1 square
+Medium     = 1 square
+Large      = 2 squares
+Huge       = 3 squares
+Gargantuan = 4+ squares
+```
+
+For a 512x512 token image:
+
+```text
+spaceSquares = creature space in grid squares
+dpi = imagePixelWidth / spaceSquares
+```
+
+Examples:
+
+```text
+Medium 512px token, 1 square: dpi = 512 / 1 = 512
+Large 512px token, 2 squares: dpi = 512 / 2 = 256
+Huge 512px token, 3 squares: dpi = 512 / 3 = 170.666...
+```
+
+Alternatively, AMBA can rasterize larger tokens at a constant 512 pixels per square:
+
+```text
+Medium = 512x512, dpi 512
+Large = 1024x1024, dpi 512
+Huge = 1536x1536, dpi 512
+```
+
+The second approach preserves token art detail better for larger creatures. The first approach keeps file sizes smaller. For AMBA-generated tokens, the second approach is cleaner if image size is not a concern.
+
+Important conclusion:
+
+Rendering SVG token art as `1x1` is fine for a Medium creature if `1x1` means "one occupied grid square." It is not fine if the humanoid drawing fills the full SVG edge-to-edge and visually reads as a 5 ft wide body. The token canvas should be one square; the creature art should be padded inside that square.
+
+### Ideal Encounter Flow
+
+The ideal AMBA-to-Owlbear encounter flow is:
+
+1. User selects or clicks an AMBA encounter.
+2. Extension creates a new Owlbear scene upload.
+3. The scene is named after the AMBA encounter.
+4. The AMBA map becomes the scene base map.
+5. Scene grid is square with scale `5 ft`.
+6. Monster-block tokens are added as default scene items.
+7. PC tokens are added as default scene items, likely in a staging row/column outside the map.
+8. User opens the scene and drags monster/PC tokens into final positions as needed.
+
+The Owlbear SDK supports the pieces needed for this shape:
+
+- `buildSceneUpload().name(...)`
+- `buildSceneUpload().gridType("SQUARE")`
+- `buildSceneUpload().gridScale("5 ft")`
+- `buildSceneUpload().baseMap(imageUpload)`
+- `buildSceneUpload().items(items)`
+- `OBR.assets.uploadScenes(...)`
+
+The tradeoff is that `uploadScenes` opens Owlbear's folder picker. That is acceptable for a "create a reusable scene in Owlbear" workflow, but it is less immediate than dropping items directly into the currently open scene.
+
+### PC Token Reuse And Asset Manager Limits
+
+It is wasteful to push the same PC token into every encounter if the goal is long-term Owlbear asset management. In normal Owlbear usage, PC tokens belong in the Asset Manager under Characters and are reused by dragging them into scenes.
+
+The current SDK supports uploading images with a type hint such as `"CHARACTER"`, and this extension already has a PC token upload path. However, the documented API says `uploadImages` opens a folder picker. The public SDK path does not appear to expose a silent "upload to this exact Characters folder" or "find/reuse this existing Character asset by metadata" workflow.
+
+Practical options:
+
+1. Direct scene items with AMBA-hosted token URLs.
+   - Fast.
+   - No Asset Manager duplication.
+   - Depends on AMBA URLs remaining available.
+
+2. Upload PC token images to Owlbear Characters through `OBR.assets.uploadImages`.
+   - Better for Owlbear-native reuse.
+   - Requires user folder picker.
+   - No known silent folder target or de-duplication API.
+
+3. Include PC token items in every generated encounter scene.
+   - Best one-click encounter setup.
+   - Potentially duplicates items/scenes.
+   - Not the same as reusable Character assets.
+
+Recommended near-term approach:
+
+- For encounter scene generation, include PC tokens as scene items using durable AMBA-hosted token URLs or AMBA-hosted raster PNG URLs.
+- Add a separate "Upload PCs to Owlbear Characters" button for users who want native asset-library reuse.
+- Do not block encounter creation on PC asset-library upload.
+
+Recommended longer-term approach:
+
+- Make AMBA expose stable raster PNG token URLs for PCs and monsters.
+- Store AMBA metadata on all scene items.
+- Add duplicate detection for AMBA-owned scene items.
+- If Owlbear later exposes asset lookup or targeted folder APIs, add true PC Character asset reuse.
 
 ## Runtime Entry Points
 
