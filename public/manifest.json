@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "manifest_version": 1,
   "author": "Edmund Landgraf",
-  "icon": "/icon.svg",
+  "icon": "/favicon.svg",
   "action": {
     "title": "AMBA",
     "icon": "/favicon.svg",
