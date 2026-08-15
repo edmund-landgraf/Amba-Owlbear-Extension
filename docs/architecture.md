@@ -936,6 +936,8 @@ Add a true layout planner that considers all AMBA-owned items and all map bounds
 
 The current project is a small Vite app.
 
+For Owlbear loading instructions, see [loading-extension.md](./loading-extension.md).
+
 Common commands:
 
 ```bash
