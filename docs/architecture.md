@@ -226,6 +226,70 @@ The tradeoff is that `uploadScenes` opens Owlbear's folder picker. That is accep
 
 The current minimum implementation uses direct scene insertion instead of creating a saved scene. It places any new map to the right of existing `MAP` and `CHARACTER` bounds, then stages monster tokens below the combined occupied area and new map so repeated queue imports do not stack on top of the same map or token pile.
 
+### Scene Creation Vs Room Rebuild
+
+There are two viable production flows.
+
+Preferred flow:
+
+1. Use Owlbear scene upload APIs.
+2. Create a new scene named after the AMBA encounter.
+3. Use the encounter map as the scene base map.
+4. Include monster tokens and optional PC staging tokens as scene items.
+5. Let Owlbear save the scene through its asset/library flow.
+
+Fallback flow:
+
+1. Use the currently open Owlbear room/scene as a rebuild canvas.
+2. Clear existing content.
+3. Rebuild the room from the AMBA encounter map and monster blocks.
+4. Let the GM manually save the rebuilt room as a new Owlbear scene.
+
+The fallback is useful if:
+
+- scene upload is too clunky because of Owlbear's picker flow,
+- we cannot access the desired saved-scene workflow directly,
+- the GM wants a fast "make this room match AMBA now" button,
+- or we need to test encounter export without committing to Owlbear asset-library behavior.
+
+The SDK exposes the needed item APIs:
+
+```text
+OBR.scene.items.getItems(...)
+OBR.scene.items.deleteItems(ids)
+OBR.scene.items.addItems(items)
+```
+
+Recommended safety levels:
+
+1. Clear AMBA-owned items only.
+   - Find items with AMBA metadata namespace.
+   - Delete only those item IDs.
+   - Reimport the queued encounter.
+   - This is safest for routine reimports.
+
+2. Clear all scene items.
+   - Delete every item returned by `OBR.scene.items.getItems()`.
+   - Reimport the queued encounter.
+   - This should require an explicit GM action such as `Clear room and rebuild`.
+   - This is destructive to hand-placed props, notes, drawings, fog-related helper items, and non-AMBA content.
+
+3. Add without clearing.
+   - Current minimum behavior.
+   - Places new content outside existing bounds.
+   - Best for non-destructive testing.
+   - Can clutter the room after repeated imports.
+
+Recommended UI:
+
+```text
+Import queued exports
+Reimport AMBA-owned items
+Clear room and rebuild from queue
+```
+
+The screenshot-based current working model is GM-driven: the GM has the authoritative room view, AMBA can stage PCs/enemies in the Owlbear scene, and the GM can save the resulting room/scene once it looks right.
+
 ### PC Token Reuse And Asset Manager Limits
 
 It is wasteful to push the same PC token into every encounter if the goal is long-term Owlbear asset management. In normal Owlbear usage, PC tokens belong in the Asset Manager under Characters and are reused by dragging them into scenes.
