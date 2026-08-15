@@ -335,3 +335,5 @@ curl -I https://edmundo.com/health
 6. Add CORS entries for the production extension origin.
 7. Replace dev test-user module loading with authenticated production context.
 8. Confirm Owlbear custom extension accepts and loads the production manifest URL.
+
+For the production current-module and queue UX, see [amba-owlbear-configuration-flow.md](./amba-owlbear-configuration-flow.md).

@@ -1006,6 +1006,8 @@ For the always-on Linux production hosting plan, see [linux-production-hosting.m
 
 For player join and token control testing, see [player-join-token-control-test.md](./player-join-token-control-test.md).
 
+For AMBA-side Owlbear configuration and production queue behavior, see [amba-owlbear-configuration-flow.md](./amba-owlbear-configuration-flow.md).
+
 Common commands:
 
 ```bash
