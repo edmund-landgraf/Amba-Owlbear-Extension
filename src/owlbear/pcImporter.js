@@ -1,121 +1,15 @@
-import OBR, { buildImage, buildImageUpload, buildSceneUpload, buildShape, buildText } from "@owlbear-rodeo/sdk";
-import {
-  getPcNoteImageUrl,
-  getPcSheetImageUrl,
-  getPcTokenImageUrl,
-  toAmbaUrl,
-} from "../amba/ambaApi.js";
+import OBR, { buildImage, buildSceneUpload, buildShape, buildText } from "@owlbear-rodeo/sdk";
 import { htmlToOwlbearRichText } from "../amba/htmlToOwlbearRichText.js";
 import {
-  fetchImageBlob,
-  imageInfoFromUrl,
-  rasterizeSvgFile,
-  safeName,
-} from "./imageUtils.js";
+  characterSheetHtml,
+  generatedTokenUpload,
+  noteInfo,
+  NOTE_COLORS,
+  snapshotInfo,
+  tokenInfo,
+} from "./pcAssets.js";
 import { getSceneBoundsForLayers, gridPosition, NS, rightOfBounds } from "./layout.js";
-
-// Default purple used when a flow does not provide a rotated color.
-const TOKEN_COLOR = "#7c3aed";
-
-// Eight colors based on the Owlbear sticky-note color strip.
-// Token and note colors rotate together by PC index: PC 0 gets purple, PC 1
-// gets cyan, and so on; after blue the palette wraps.
-const NOTE_COLORS = [
-  "#7c3aed",
-  "#45c7d8",
-  "#78f05b",
-  "#ffd23c",
-  "#d46bef",
-  "#ff4e4e",
-  "#ff7a2f",
-  "#2d6aef",
-];
-
-// Find the AMBA narrative that contains a character sheet.
-// Sheet-specific flows intentionally fail when this is missing; the main
-// token+placeholder-note flow does not call this helper.
-function characterSheetHtml(pc) {
-  const sheet = pc.narratives?.find(
-    (narrative) =>
-      /character sheet/i.test(narrative.title) || narrative.content.includes("pf2e-sheet")
-  );
-  if (!sheet) throw new Error(`No character sheet found for ${pc.name}.`);
-  return sheet.content;
-}
-
-// Find portrait art for a PC from metadata or artifacts.
-// If this returns null, tokenInfo falls back to AMBA's generated letter token.
-function portraitPath(pc) {
-  const art = Array.isArray(pc.metadata?.characterArt)
-    ? pc.metadata.characterArt.find((entry) => typeof entry?.url === "string" && entry.url)
-    : null;
-  if (art) return art.url;
-  if (typeof pc.metadata?.portraitUrl === "string" && pc.metadata.portraitUrl) return pc.metadata.portraitUrl;
-  const artifact = pc.artifacts?.find((entry) => entry.artifactType?.key === "image" && typeof entry.payload?.url === "string" && ["portrait", "art"].includes(entry.payload?.role));
-  return artifact?.payload?.url ?? null;
-}
-
-// Resolve the token image for a PC.
-// Prefer real portrait art when present and decodable; otherwise use the AMBA
-// generated 512x512 colored first-letter token.
-async function tokenInfo(moduleId, pc, color = TOKEN_COLOR) {
-  const path = portraitPath(pc);
-  if (path) {
-    const url = toAmbaUrl(path);
-    try {
-      return await imageInfoFromUrl(url, `${safeName(pc.name)}-portrait`);
-    } catch {
-      // Fall through to generated AMBA token if portrait metadata is stale.
-    }
-  }
-
-  // Generated AMBA tokens are always 512x512, so we do not need to decode the
-  // SVG just to learn dimensions.
-  const url = getPcTokenImageUrl(moduleId, pc.id, color);
-  return {
-    file: await fetchImageBlob(url, `${safeName(pc.name)}-token.svg`),
-    image: { width: 512, height: 512, url, mime: "image/svg+xml" },
-    grid: { dpi: 512, offset: { x: 256, y: 256 } },
-  };
-}
-
-// Build one Character-library upload for a PC token.
-// Owlbear will still ask the user which Characters folder to use; the SDK does
-// not expose a folder target parameter.
-async function generatedTokenUpload(moduleId, moduleTitle, pc, color = TOKEN_COLOR) {
-  const url = getPcTokenImageUrl(moduleId, pc.id, color);
-  const svgFile = await fetchImageBlob(url, `${safeName(pc.name)}-token.svg`);
-  const pngFile = await rasterizeSvgFile(svgFile, `${safeName(pc.name)}-token.png`, 512, 512);
-  return buildImageUpload(pngFile)
-    .name(pc.name)
-    .description(`AMBA generated token for ${pc.name} from ${moduleTitle}`)
-    .grid({ dpi: 512, offset: { x: 256, y: 256 } })
-    .plainText(pc.name)
-    .build();
-}
-
-// Image-backed note helper retained for older experiments.
-// The current note prototype uses Shape + Text instead, because text overlays on
-// image notes produced vertical editing behavior in Owlbear.
-async function noteInfo(moduleId, pc) {
-  const url = getPcNoteImageUrl(moduleId, pc.id, TOKEN_COLOR);
-  return {
-    image: { width: 512, height: 512, url, mime: "image/svg+xml" },
-    grid: { dpi: 512, offset: { x: 256, y: 256 } },
-  };
-}
-
-// Resolve a rendered character sheet PNG.
-// Missing sheets surface as 404s from AMBA; the sheet-image importer handles
-// those with Promise.allSettled so one missing sheet does not stop the batch.
-async function snapshotInfo(moduleId, pc) {
-  const url = getPcSheetImageUrl(moduleId, pc.id, TOKEN_COLOR);
-  const info = await imageInfoFromUrl(url, `${safeName(pc.name)}-character-sheet-snapshot.png`);
-  return {
-    ...info,
-    grid: { dpi: 200, offset: { x: info.image.width / 2, y: info.image.height / 2 } },
-  };
-}
+import { addItemsToCurrentScene } from "./sceneItems.js";
 
 // Normalize thrown values from Owlbear/browser APIs into readable messages.
 // Validation errors can be plain objects, not Error instances.
@@ -128,17 +22,6 @@ function uploadErrorMessage(error) {
   } catch {
     return String(error);
   }
-}
-
-// Add items directly to the current Owlbear scene.
-// This is the no-folder-picker path; unlike asset upload and scene upload, it
-// does not ask the user to pick a library folder.
-async function addItemsToCurrentScene(items) {
-  const ready = await OBR.scene.isReady();
-  if (!ready) {
-    throw new Error("No Owlbear scene is currently open. Open or create a blank scene, then import again.");
-  }
-  await OBR.scene.items.addItems(items);
 }
 
 // Legacy/full character-sheet bundle builder.
