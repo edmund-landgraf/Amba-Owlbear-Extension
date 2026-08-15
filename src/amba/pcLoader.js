@@ -1,5 +1,6 @@
 import { getPcs, getTestUserModules } from "./ambaApi.js";
 import { wireEncounterControls } from "./encounterControls.js";
+import { wireExportQueueControls } from "./exportQueueControls.js";
 import { errorMessage, renderPcButtons } from "./uiHelpers.js";
 import { addPcSheetImagesToCurrentScene, addPcTokensAndNotesToCurrentScene } from "../owlbear/pcImporter.js";
 
@@ -16,6 +17,7 @@ export async function wirePcLoader() {
   const importSheetImages = document.getElementById("importSheetImages");
   const encounterPicker = document.getElementById("encounterPicker");
   const importEncounter = document.getElementById("importEncounter");
+  const importQueuedExports = document.getElementById("importQueuedExports");
   const pcList = document.getElementById("pcList");
   const importStatus = document.getElementById("importStatus");
   const encounterStatus = document.getElementById("encounterStatus");
@@ -29,6 +31,7 @@ export async function wirePcLoader() {
     importEncounter,
     encounterStatus,
   });
+  wireExportQueueControls({ importQueuedExports, encounterStatus });
 
   // Main import button: fetch PCs, list their names, then drop token+note pairs
   // directly into the currently open Owlbear scene.

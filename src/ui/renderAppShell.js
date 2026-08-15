@@ -30,6 +30,7 @@ export function renderAppShell() {
           <option>Select a module first</option>
         </select>
         <button id="importEncounter" disabled>Import encounter</button>
+        <button id="importQueuedExports">Import queued exports</button>
         <p id="encounterStatus" aria-live="polite"></p>
       </section>
     </main>

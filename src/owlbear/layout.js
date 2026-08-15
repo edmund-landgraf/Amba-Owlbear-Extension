@@ -28,6 +28,22 @@ export function boundsFromItems(items) {
   };
 }
 
+export function combineBounds(...boundsList) {
+  const bounds = boundsList.filter(Boolean);
+  if (!bounds.length) return null;
+
+  const minX = Math.min(...bounds.map((entry) => entry.min.x));
+  const minY = Math.min(...bounds.map((entry) => entry.min.y));
+  const maxX = Math.max(...bounds.map((entry) => entry.max.x));
+  const maxY = Math.max(...bounds.map((entry) => entry.max.y));
+  return {
+    min: { x: minX, y: minY },
+    max: { x: maxX, y: maxY },
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
 export async function getSceneBoundsForLayers(layers) {
   const items = await OBR.scene.items.getItems((item) => layers.includes(item.layer));
   if (!items.length) return null;
@@ -65,5 +81,13 @@ export function belowBounds(bounds, margin = 500) {
   return {
     x: bounds.min.x,
     y: bounds.max.y + margin,
+  };
+}
+
+export function imagePositionRightOfBounds(bounds, imageInfo, margin = 800) {
+  if (!bounds) return { x: 600, y: 600 };
+  return {
+    x: bounds.max.x + margin + imageInfo.image.width / 2,
+    y: bounds.min.y + imageInfo.image.height / 2,
   };
 }

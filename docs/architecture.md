@@ -150,16 +150,68 @@ Rendering SVG token art as `1x1` is fine for a Medium creature if `1x1` means "o
 
 ### Ideal Encounter Flow
 
-The ideal AMBA-to-Owlbear encounter flow is:
+The ideal AMBA-to-Owlbear encounter flow is queue-driven:
 
-1. User selects or clicks an AMBA encounter.
-2. Extension creates a new Owlbear scene upload.
-3. The scene is named after the AMBA encounter.
-4. The AMBA map becomes the scene base map.
-5. Scene grid is square with scale `5 ft`.
-6. Monster-block tokens are added as default scene items.
-7. PC tokens are added as default scene items, likely in a staging row/column outside the map.
-8. User opens the scene and drags monster/PC tokens into final positions as needed.
+1. User right-clicks an AMBA encounter.
+2. User chooses "Export to Owlbear".
+3. AMBA pushes the encounter ID into an Owlbear export queue.
+4. The Owlbear extension reads the queue.
+5. For each queued encounter, the extension pulls full encounter data from AMBA.
+6. If the encounter has a map, the extension imports the map.
+7. If the encounter has monster blocks, the extension loops through them, renders/rasterizes SVG tokens, and stages them in the scene.
+8. The extension marks the queue item complete or failed in AMBA.
+
+The minimum useful export is either:
+
+- a map,
+- monster blocks,
+- or both.
+
+If an encounter has both a map and monster blocks, both should be pushed in one queue item.
+
+The current extension-side queue contract is:
+
+```text
+GET  /api/owlbear/export-queue
+POST /api/owlbear/export-queue/:queueItemId/complete
+POST /api/owlbear/export-queue/:queueItemId/fail
+```
+
+Queue items should include:
+
+```json
+{
+  "id": "queue-item-id",
+  "moduleId": "amba-module-id",
+  "encounterId": "amba-encounter-id"
+}
+```
+
+They may optionally embed enough encounter data for immediate import:
+
+```json
+{
+  "id": "queue-item-id",
+  "moduleId": "amba-module-id",
+  "encounter": {
+    "id": "amba-encounter-id",
+    "title": "Encounter Name",
+    "map": {},
+    "monsterBlocks": []
+  }
+}
+```
+
+Embedded encounter data is useful for reducing one HTTP round trip, but the extension can fetch by `moduleId + encounterId` when needed.
+
+The ideal longer-term Owlbear artifact is a new scene:
+
+1. The scene is named after the AMBA encounter.
+2. The AMBA map becomes the scene base map.
+3. Scene grid is square with scale `5 ft`.
+4. Monster-block tokens are added as default scene items.
+5. PC tokens are added as default scene items, likely in a staging row/column outside the map.
+6. User opens the scene and drags monster/PC tokens into final positions as needed.
 
 The Owlbear SDK supports the pieces needed for this shape:
 
@@ -171,6 +223,8 @@ The Owlbear SDK supports the pieces needed for this shape:
 - `OBR.assets.uploadScenes(...)`
 
 The tradeoff is that `uploadScenes` opens Owlbear's folder picker. That is acceptable for a "create a reusable scene in Owlbear" workflow, but it is less immediate than dropping items directly into the currently open scene.
+
+The current minimum implementation uses direct scene insertion instead of creating a saved scene. It places any new map to the right of existing `MAP` and `CHARACTER` bounds, then stages monster tokens below the combined occupied area and new map so repeated queue imports do not stack on top of the same map or token pile.
 
 ### PC Token Reuse And Asset Manager Limits
 

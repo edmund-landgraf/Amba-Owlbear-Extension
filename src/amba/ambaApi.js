@@ -21,6 +21,21 @@ async function getJson(path) {
   return response.json();
 }
 
+async function postJson(path, body = {}) {
+  const response = await fetch(`${AMBA_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error ?? `AMBA request failed: ${response.status}`);
+  }
+
+  return response.status === 204 ? null : response.json().catch(() => null);
+}
+
 // Dev-only module picker source.
 //
 // Owlbear does not know which AMBA module the user is looking at, so the
@@ -47,6 +62,22 @@ export function getEncounter(moduleId, encounterId) {
   return getJson(
     `/api/modules/${encodeURIComponent(moduleId)}/encounters/${encodeURIComponent(encounterId)}`
   );
+}
+
+// Queue consumed by the Owlbear extension. AMBA pushes into this queue when the
+// user right-clicks an encounter and chooses "Export to Owlbear".
+export function getOwlbearExportQueue() {
+  return getJson("/api/owlbear/export-queue");
+}
+
+export function completeOwlbearExport(queueItemId, result) {
+  return postJson(`/api/owlbear/export-queue/${encodeURIComponent(queueItemId)}/complete`, result);
+}
+
+export function failOwlbearExport(queueItemId, error) {
+  return postJson(`/api/owlbear/export-queue/${encodeURIComponent(queueItemId)}/fail`, {
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
 
 // Short URL for the rendered character sheet PNG.

@@ -15,18 +15,21 @@ import {
 import {
   belowBounds,
   boundsFromImageInfo,
+  combineBounds,
   getSceneBoundsForLayers,
   gridPosition,
+  imagePositionRightOfBounds,
   NS,
 } from "./layout.js";
 import { rasterizedTokenInfo } from "./tokenImage.js";
 import { labelBaseForBlocks, labelFontSize, numberedLabel } from "./monsterLabels.js";
 
-async function buildMapItem({ moduleId, encounter, position }) {
+async function buildMapItem({ moduleId, encounter, occupiedBounds }) {
   const url = mapUrl(encounter);
   if (!url) return null;
 
   const info = await imageInfoFromUrl(url, `${safeName(encounterTitle(encounter), "encounter")}-map`);
+  const position = imagePositionRightOfBounds(occupiedBounds, info, 1000);
   const item = buildImage(info.image, info.grid)
     .name(`${encounterTitle(encounter)} Map`)
     .description(`AMBA encounter map for ${encounterTitle(encounter)}`)
@@ -93,12 +96,12 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin }) {
 
 export async function addEncounterToCurrentScene({ moduleId, encounter }) {
   const items = [];
-  const mapPosition = { x: 600, y: 600 };
-  const map = await buildMapItem({ moduleId, encounter, position: mapPosition });
+  const occupiedBounds = await getSceneBoundsForLayers(["MAP", "CHARACTER"]);
+  const map = await buildMapItem({ moduleId, encounter, occupiedBounds });
   if (map) items.push(map.item);
 
-  const existingMapBounds = map ? map.bounds : await getSceneBoundsForLayers(["MAP"]);
-  const monsterOrigin = belowBounds(existingMapBounds, 600);
+  const stagingBounds = combineBounds(occupiedBounds, map?.bounds);
+  const monsterOrigin = belowBounds(stagingBounds, 600);
   const monsterItems = await buildMonsterTokenItems({ moduleId, encounter, origin: monsterOrigin });
   items.push(...monsterItems);
 
