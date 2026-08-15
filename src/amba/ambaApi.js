@@ -1,7 +1,15 @@
 // All AMBA API calls in the Owlbear extension are routed through this file.
 // Keeping the base URL centralized makes it obvious where the local dev API
 // lives, and gives us one future place to swap localhost for production.
-const AMBA_BASE_URL = "http://localhost:5190";
+const AMBA_BASE_URL = import.meta.env.VITE_AMBA_BASE_URL ?? "";
+
+function toApiUrl(path) {
+  return `${AMBA_BASE_URL}${path}`;
+}
+
+function toAssetUrl(path) {
+  return new URL(path, AMBA_BASE_URL || window.location.origin).href;
+}
 
 // Small shared JSON helper for AMBA endpoints.
 //
@@ -9,7 +17,7 @@ const AMBA_BASE_URL = "http://localhost:5190";
 // surface as vague browser errors. This helper tries to extract AMBA's `{error}`
 // payload first, then falls back to the HTTP status.
 async function getJson(path) {
-  const response = await fetch(`${AMBA_BASE_URL}${path}`);
+  const response = await fetch(toApiUrl(path));
 
   if (!response.ok) {
     // Some AMBA errors are JSON, but CORS/network/server errors may not be.
@@ -22,7 +30,7 @@ async function getJson(path) {
 }
 
 async function postJson(path, body = {}) {
-  const response = await fetch(`${AMBA_BASE_URL}${path}`, {
+  const response = await fetch(toApiUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -88,7 +96,7 @@ export function failOwlbearExport(queueItemId, error) {
 export function getPcSheetImageUrl(moduleId, pcId, color) {
   const url = new URL(
     `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/sheet.png`,
-    AMBA_BASE_URL
+    AMBA_BASE_URL || window.location.origin
   );
   // The API uses this color as an accent when rendering the sheet image.
   if (color) url.searchParams.set("color", color);
@@ -103,7 +111,7 @@ export function getPcSheetImageUrl(moduleId, pcId, color) {
 export function getPcTokenImageUrl(moduleId, pcId, color) {
   const url = new URL(
     `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/token.svg`,
-    AMBA_BASE_URL
+    AMBA_BASE_URL || window.location.origin
   );
   // The color query parameter lets the importer rotate token colors per PC.
   if (color) url.searchParams.set("color", color);
@@ -116,7 +124,7 @@ export function getPcTokenImageUrl(moduleId, pcId, color) {
 export function getMonsterTokenImageUrl(moduleId, monsterId, color, options = {}) {
   const url = new URL(
     `/api/modules/${encodeURIComponent(moduleId)}/npcs/${encodeURIComponent(monsterId)}/token.svg`,
-    AMBA_BASE_URL
+    AMBA_BASE_URL || window.location.origin
   );
   if (color) url.searchParams.set("color", color);
   if (options.label) url.searchParams.set("label", options.label);
@@ -131,7 +139,7 @@ export function getMonsterTokenImageUrl(moduleId, monsterId, color, options = {}
 export function getPcNoteImageUrl(moduleId, pcId, color) {
   const url = new URL(
     `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/note.svg`,
-    AMBA_BASE_URL
+    AMBA_BASE_URL || window.location.origin
   );
   // The color query parameter matches the generated token color.
   if (color) url.searchParams.set("color", color);
@@ -142,11 +150,11 @@ export function getPcNoteImageUrl(moduleId, pcId, color) {
 // Portrait metadata may come back as a relative path, while Owlbear item images
 // require absolute URLs.
 export function toAmbaUrl(path) {
-  return new URL(path, AMBA_BASE_URL).href;
+  return toAssetUrl(path);
 }
 
 // Convenience URL for opening the selected AMBA module in the normal AMBA UI.
 // Not part of the current import flow, but useful for debugging/navigation.
 export function getModuleUrl(moduleId) {
-  return `${AMBA_BASE_URL}/m/${encodeURIComponent(moduleId)}`;
+  return toAssetUrl(`/m/${encodeURIComponent(moduleId)}`);
 }
