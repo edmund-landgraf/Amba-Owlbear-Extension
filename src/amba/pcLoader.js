@@ -18,6 +18,7 @@ export async function wirePcLoader() {
   const encounterPicker = document.getElementById("encounterPicker");
   const importEncounter = document.getElementById("importEncounter");
   const importQueuedExports = document.getElementById("importQueuedExports");
+  const clearAndImportQueuedExports = document.getElementById("clearAndImportQueuedExports");
   const pcList = document.getElementById("pcList");
   const importStatus = document.getElementById("importStatus");
   const encounterStatus = document.getElementById("encounterStatus");
@@ -31,7 +32,13 @@ export async function wirePcLoader() {
     importEncounter,
     encounterStatus,
   });
-  wireExportQueueControls({ importQueuedExports, modulePicker, encounterPicker, encounterStatus });
+  wireExportQueueControls({
+    importQueuedExports,
+    clearAndImportQueuedExports,
+    modulePicker,
+    encounterPicker,
+    encounterStatus,
+  });
 
   // Main import button: fetch PCs, list their names, then drop token+note pairs
   // directly into the currently open Owlbear scene.

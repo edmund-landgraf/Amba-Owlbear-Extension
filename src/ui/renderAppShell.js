@@ -31,6 +31,7 @@ export function renderAppShell() {
         </select>
         <button id="importEncounter" disabled>Import encounter</button>
         <button id="importQueuedExports">Import queued exports</button>
+        <button id="clearAndImportQueuedExports">Clear scene and import queued exports</button>
         <p id="encounterStatus" aria-live="polite"></p>
       </section>
     </main>

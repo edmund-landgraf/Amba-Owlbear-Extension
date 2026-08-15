@@ -6,6 +6,7 @@ import {
 } from "./ambaApi.js";
 import { addEncounterToCurrentScene } from "../owlbear/encounterImporter.js";
 import { encounterTitle } from "../owlbear/encounterData.js";
+import { clearCurrentScene } from "../owlbear/sceneItems.js";
 import { errorMessage } from "./uiHelpers.js";
 
 function queueItemId(item, index) {
@@ -62,18 +63,36 @@ async function loadQueue({ modulePicker, encounterPicker }) {
   }
 }
 
-export function wireExportQueueControls({ importQueuedExports, modulePicker, encounterPicker, encounterStatus }) {
-  importQueuedExports.addEventListener("click", async () => {
+export function wireExportQueueControls({
+  importQueuedExports,
+  clearAndImportQueuedExports,
+  modulePicker,
+  encounterPicker,
+  encounterStatus,
+}) {
+  async function importQueue({ clearScene = false } = {}) {
     encounterStatus.classList.remove("error");
-    encounterStatus.textContent = "Loading queued AMBA exports...";
+    encounterStatus.textContent = clearScene
+      ? "Clearing current Owlbear scene..."
+      : "Loading queued AMBA exports...";
 
     try {
       importQueuedExports.disabled = true;
+      if (clearAndImportQueuedExports) clearAndImportQueuedExports.disabled = true;
+
+      let cleared = 0;
+      if (clearScene) {
+        cleared = await clearCurrentScene();
+        encounterStatus.textContent = `Cleared ${cleared} item${cleared === 1 ? "" : "s"}. Loading queued AMBA exports...`;
+      }
+
       const queue = await loadQueue({ modulePicker, encounterPicker });
       const items = Array.isArray(queue) ? queue : queue?.items ?? [];
 
       if (!items.length) {
-        encounterStatus.textContent = "No queued AMBA exports.";
+        encounterStatus.textContent = clearScene
+          ? `Cleared ${cleared} item${cleared === 1 ? "" : "s"}; no queued AMBA exports.`
+          : "No queued AMBA exports.";
         return;
       }
 
@@ -104,13 +123,18 @@ export function wireExportQueueControls({ importQueuedExports, modulePicker, enc
         }
       }
 
-      encounterStatus.textContent = `Imported ${imported} queued export${imported === 1 ? "" : "s"}: ${mapCount} map${mapCount === 1 ? "" : "s"}, ${tokenCount} monster token${tokenCount === 1 ? "" : "s"}${failed ? `; ${failed} failed.` : "."}`;
+      const clearSummary = clearScene ? `Cleared ${cleared} item${cleared === 1 ? "" : "s"}. ` : "";
+      encounterStatus.textContent = `${clearSummary}Imported ${imported} queued export${imported === 1 ? "" : "s"}: ${mapCount} map${mapCount === 1 ? "" : "s"}, ${tokenCount} monster token${tokenCount === 1 ? "" : "s"}${failed ? `; ${failed} failed.` : "."}`;
       if (failed) encounterStatus.classList.add("error");
     } catch (error) {
       encounterStatus.textContent = errorMessage(error, "Unable to import queued exports.");
       encounterStatus.classList.add("error");
     } finally {
       importQueuedExports.disabled = false;
+      if (clearAndImportQueuedExports) clearAndImportQueuedExports.disabled = false;
     }
-  });
+  }
+
+  importQueuedExports.addEventListener("click", () => void importQueue());
+  clearAndImportQueuedExports?.addEventListener("click", () => void importQueue({ clearScene: true }));
 }
