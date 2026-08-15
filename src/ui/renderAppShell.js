@@ -32,6 +32,8 @@ export function renderAppShell() {
         <button id="importEncounter" disabled>Import encounter</button>
         <button id="importQueuedExports">Import queued exports</button>
         <button id="clearAndImportQueuedExports">Clear scene and import queued exports</button>
+        <button id="saveEncounterPlacements" disabled>Save token placements to AMBA</button>
+        <div id="encounterDiagnostics" aria-live="polite"></div>
         <p id="encounterStatus" aria-live="polite"></p>
       </section>
     </main>

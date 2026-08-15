@@ -69,12 +69,14 @@ export function wireExportQueueControls({
   modulePicker,
   encounterPicker,
   encounterStatus,
+  encounterDiagnostics,
 }) {
   async function importQueue({ clearScene = false } = {}) {
     encounterStatus.classList.remove("error");
     encounterStatus.textContent = clearScene
       ? "Clearing current Owlbear scene..."
       : "Loading queued AMBA exports...";
+    if (encounterDiagnostics) encounterDiagnostics.textContent = "";
 
     try {
       importQueuedExports.disabled = true;
@@ -100,6 +102,8 @@ export function wireExportQueueControls({
       let failed = 0;
       let tokenCount = 0;
       let mapCount = 0;
+      let statCardCount = 0;
+      let preservedCount = 0;
 
       for (const [index, item] of items.entries()) {
         const id = queueItemId(item, index);
@@ -109,12 +113,15 @@ export function wireExportQueueControls({
           const result = await addEncounterToCurrentScene({ moduleId, encounter });
           imported += 1;
           tokenCount += result.monsterTokensImported;
+          statCardCount += result.statCardsImported ?? 0;
+          preservedCount += (result.mapSkipped ? 1 : 0) + (result.monsterTokensSkipped ?? 0);
           if (result.mapImported) mapCount += 1;
           if (!item.devFallback) {
             await completeOwlbearExport(id, {
               encounter: encounterTitle(encounter),
               mapImported: result.mapImported,
               monsterTokensImported: result.monsterTokensImported,
+              statCardsImported: result.statCardsImported,
             });
           }
         } catch (error) {
@@ -124,7 +131,10 @@ export function wireExportQueueControls({
       }
 
       const clearSummary = clearScene ? `Cleared ${cleared} item${cleared === 1 ? "" : "s"}. ` : "";
-      encounterStatus.textContent = `${clearSummary}Imported ${imported} queued export${imported === 1 ? "" : "s"}: ${mapCount} map${mapCount === 1 ? "" : "s"}, ${tokenCount} monster token${tokenCount === 1 ? "" : "s"}${failed ? `; ${failed} failed.` : "."}`;
+      encounterStatus.textContent = `${clearSummary}Imported ${imported} queued export${imported === 1 ? "" : "s"}: ${mapCount} map${mapCount === 1 ? "" : "s"}, ${tokenCount} monster token${tokenCount === 1 ? "" : "s"}, ${statCardCount} stat card item${statCardCount === 1 ? "" : "s"}${preservedCount ? `; preserved ${preservedCount} existing item${preservedCount === 1 ? "" : "s"}` : ""}${failed ? `; ${failed} failed.` : "."}`;
+      if (encounterDiagnostics) {
+        encounterDiagnostics.textContent = "Queue import uses AMBA metadata as an upsert key; existing imported tokens are left where the user dragged them.";
+      }
       if (failed) encounterStatus.classList.add("error");
     } catch (error) {
       encounterStatus.textContent = errorMessage(error, "Unable to import queued exports.");

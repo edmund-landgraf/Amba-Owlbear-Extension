@@ -1,15 +1,18 @@
-import { buildImage } from "@owlbear-rodeo/sdk";
+import { buildImage, buildShape, buildText } from "@owlbear-rodeo/sdk";
 import { imageInfoFromUrl, safeName } from "./imageUtils.js";
 import { addItemsToCurrentScene } from "./sceneItems.js";
 import {
   encounterId,
   encounterTitle,
   mapDpi,
+  mapSourceId,
   mapUrl,
   monsterBlocks,
   monsterCount,
   monsterId,
   monsterName,
+  monsterSourceId,
+  monsterStatBlock,
   monsterTokenUrl,
   TOKEN_COLORS,
 } from "./encounterData.js";
@@ -24,10 +27,35 @@ import {
 } from "./layout.js";
 import { rasterizedTokenInfo } from "./tokenImage.js";
 import { labelBaseForBlocks, labelFontSize, numberedLabel } from "./monsterLabels.js";
+import {
+  encounterItemMetadata,
+  findImportedItem,
+  getImportedEncounterItems,
+  saveEncounterSceneMetadata,
+} from "./encounterMetadata.js";
 
-async function buildMapItem({ moduleId, encounter, occupiedBounds }) {
+function statBlockRichText(block) {
+  const text = monsterStatBlock(block);
+  const lines = [
+    monsterName(block),
+    block.level ? `Level ${block.level}` : "",
+    block.source ? `Source: ${block.source}` : "",
+    text,
+  ].filter(Boolean);
+  return lines.map((line) => ({
+    type: "paragraph",
+    children: [{ text: String(line).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() }],
+  }));
+}
+
+async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems }) {
   const url = mapUrl(encounter);
   if (!url) return null;
+
+  const sourceId = mapSourceId(encounter);
+  if (findImportedItem(importedItems, { kind: "encounter-map", sourceId })) {
+    return { skipped: true };
+  }
 
   const info = await imageInfoFromUrl(
     url,
@@ -43,17 +71,21 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds }) {
     .position(position)
     .locked(true)
     .metadata({
-      [`${NS}/moduleId`]: moduleId,
-      [`${NS}/encounterId`]: encounterId(encounter),
-      [`${NS}/kind`]: "encounter-map",
+      ...encounterItemMetadata({
+        moduleId,
+        encounterId: encounterId(encounter),
+        kind: "encounter-map",
+        sourceId,
+      }),
     })
     .build();
 
   return { item, bounds: boundsFromImageInfo(info, position) };
 }
 
-async function buildMonsterTokenItems({ moduleId, encounter, origin }) {
+async function buildMonsterTokenItems({ moduleId, encounter, origin, importedItems }) {
   const items = [];
+  let skipped = 0;
   const blocks = monsterBlocks(encounter);
   const labelBases = labelBaseForBlocks(blocks, monsterName);
 
@@ -65,6 +97,13 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin }) {
 
     for (let copy = 0; copy < count; copy += 1) {
       const label = numberedLabel(labelBase, copy);
+      const sourceId = monsterSourceId(block);
+      const tokenInstanceId = `${safeName(sourceId, "monster")}-${copy + 1}`;
+      if (findImportedItem(importedItems, { kind: "monster-token", tokenInstanceId })) {
+        skipped += 1;
+        continue;
+      }
+
       const url = monsterTokenUrl(moduleId, block, color, {
         label,
         fontSize: labelFontSize(label),
@@ -87,14 +126,80 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin }) {
           .layer("CHARACTER")
           .position(position)
           .metadata({
-            [`${NS}/moduleId`]: moduleId,
-            [`${NS}/encounterId`]: encounterId(encounter),
-            [`${NS}/monsterId`]: monsterId(block) ?? "",
-            [`${NS}/kind`]: "monster-token",
+            ...encounterItemMetadata({
+              moduleId,
+              encounterId: encounterId(encounter),
+              kind: "monster-token",
+              sourceId,
+              monsterId: monsterId(block) ?? "",
+              tokenInstanceId,
+            }),
           })
           .build()
       );
     }
+  }
+
+  return { items, skipped };
+}
+
+function buildMonsterStatCardItems({ moduleId, encounter, origin, importedItems }) {
+  const items = [];
+  const blocks = monsterBlocks(encounter);
+
+  for (const [index, block] of blocks.entries()) {
+    const text = monsterStatBlock(block);
+    if (!text) continue;
+
+    const sourceId = monsterSourceId(block);
+    if (findImportedItem(importedItems, { kind: "monster-stat-card", sourceId })) continue;
+
+    const position = gridPosition(index, {
+      startX: origin.x + 360,
+      startY: origin.y + 260,
+      columns: 2,
+      gapX: 900,
+      gapY: 520,
+    });
+    const metadata = encounterItemMetadata({
+      moduleId,
+      encounterId: encounterId(encounter),
+      kind: "monster-stat-card",
+      sourceId,
+      monsterId: monsterId(block) ?? "",
+    });
+
+    items.push(
+      buildShape()
+        .name(`${monsterName(block)} Stat Card`)
+        .description(`AMBA monster stat block for ${monsterName(block)}`)
+        .shapeType("RECTANGLE")
+        .width(760)
+        .height(420)
+        .fillColor("#f7f2e8")
+        .fillOpacity(1)
+        .strokeColor("#4a4036")
+        .strokeOpacity(1)
+        .strokeWidth(6)
+        .layer("NOTE")
+        .position(position)
+        .metadata(metadata)
+        .build(),
+      buildText()
+        .name(`${monsterName(block)} Stat Text`)
+        .description(`AMBA monster stat text for ${monsterName(block)}`)
+        .richText(statBlockRichText(block))
+        .width(680)
+        .height("AUTO")
+        .padding(0)
+        .fontSize(24)
+        .fillColor("#251f1a")
+        .layer("NOTE")
+        .position(position)
+        .zIndex(1)
+        .metadata({ ...metadata, [`${NS}/kind`]: "monster-stat-card-text" })
+        .build()
+    );
   }
 
   return items;
@@ -102,22 +207,42 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin }) {
 
 export async function addEncounterToCurrentScene({ moduleId, encounter }) {
   const items = [];
+  const id = encounterId(encounter);
+  const importedItems = await getImportedEncounterItems(moduleId, id);
   const occupiedBounds = await getSceneBoundsForLayers(["MAP", "CHARACTER"]);
-  const map = await buildMapItem({ moduleId, encounter, occupiedBounds });
-  if (map) items.push(map.item);
+  const map = await buildMapItem({ moduleId, encounter, occupiedBounds, importedItems });
+  if (map?.item) items.push(map.item);
 
   const stagingBounds = combineBounds(occupiedBounds, map?.bounds);
   const monsterOrigin = belowBounds(stagingBounds, 600);
-  const monsterItems = await buildMonsterTokenItems({ moduleId, encounter, origin: monsterOrigin });
-  items.push(...monsterItems);
+  const monsterResult = await buildMonsterTokenItems({
+    moduleId,
+    encounter,
+    origin: monsterOrigin,
+    importedItems,
+  });
+  items.push(...monsterResult.items);
 
-  if (!items.length) {
+  const cardOrigin = belowBounds(combineBounds(stagingBounds, { min: monsterOrigin, max: monsterOrigin }), 1200);
+  const statCardItems = buildMonsterStatCardItems({
+    moduleId,
+    encounter,
+    origin: cardOrigin,
+    importedItems,
+  });
+  items.push(...statCardItems);
+
+  if (!items.length && !importedItems.length) {
     throw new Error("This encounter did not include a map or monster tokens AMBA can export yet.");
   }
 
-  await addItemsToCurrentScene(items);
+  if (items.length) await addItemsToCurrentScene(items);
+  await saveEncounterSceneMetadata({ moduleId, encounterId: id, title: encounterTitle(encounter) });
   return {
-    mapImported: Boolean(map),
-    monsterTokensImported: monsterItems.length,
+    mapImported: Boolean(map?.item),
+    mapSkipped: Boolean(map?.skipped),
+    monsterTokensImported: monsterResult.items.length,
+    monsterTokensSkipped: monsterResult.skipped,
+    statCardsImported: statCardItems.length,
   };
 }

@@ -171,6 +171,13 @@ export function failOwlbearExport(queueItemId, error) {
   });
 }
 
+export function saveOwlbearPlacements(moduleId, encounterId, payload) {
+  return postJson(
+    `/api/modules/${encodeURIComponent(moduleId)}/owlbear/encounters/${encodeURIComponent(encounterId)}/placements`,
+    payload
+  );
+}
+
 // Short URL for the rendered character sheet PNG.
 //
 // This intentionally returns a URL instead of base64 image data. Owlbear scene

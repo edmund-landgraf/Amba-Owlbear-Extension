@@ -36,3 +36,15 @@ export function encounterLabel(encounter) {
 export function encounterKey(encounter, index) {
   return encounter.id ?? encounter.encounterId ?? encounter.slug ?? String(index);
 }
+
+export function encounterImportSummary(result) {
+  const pieces = [];
+  pieces.push(`${result.mapImported ? 1 : 0} map${result.mapImported ? "" : "s"}`);
+  pieces.push(`${result.monsterTokensImported} monster token${result.monsterTokensImported === 1 ? "" : "s"}`);
+  if (result.statCardsImported) {
+    pieces.push(`${result.statCardsImported} stat card item${result.statCardsImported === 1 ? "" : "s"}`);
+  }
+
+  const skipped = (result.mapSkipped ? 1 : 0) + (result.monsterTokensSkipped ?? 0);
+  return `Imported ${pieces.join(", ")}${skipped ? `; preserved ${skipped} existing item${skipped === 1 ? "" : "s"}.` : "."}`;
+}

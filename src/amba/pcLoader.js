@@ -19,9 +19,11 @@ export async function wirePcLoader() {
   const importEncounter = document.getElementById("importEncounter");
   const importQueuedExports = document.getElementById("importQueuedExports");
   const clearAndImportQueuedExports = document.getElementById("clearAndImportQueuedExports");
+  const saveEncounterPlacements = document.getElementById("saveEncounterPlacements");
   const pcList = document.getElementById("pcList");
   const importStatus = document.getElementById("importStatus");
   const encounterStatus = document.getElementById("encounterStatus");
+  const encounterDiagnostics = document.getElementById("encounterDiagnostics");
 
   // The module list is loaded once on startup and reused by the controls.
   // The selected module ID lives in the <select>; this array preserves the
@@ -30,7 +32,9 @@ export async function wirePcLoader() {
     modulePicker,
     encounterPicker,
     importEncounter,
+    saveEncounterPlacements,
     encounterStatus,
+    encounterDiagnostics,
   });
   wireExportQueueControls({
     importQueuedExports,
@@ -38,6 +42,7 @@ export async function wirePcLoader() {
     modulePicker,
     encounterPicker,
     encounterStatus,
+    encounterDiagnostics,
   });
 
   // Main import button: fetch PCs, list their names, then drop token+note pairs

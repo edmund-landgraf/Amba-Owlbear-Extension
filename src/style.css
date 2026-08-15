@@ -53,6 +53,12 @@ select {
   margin-top: 10px;
 }
 
+#encounterDiagnostics {
+  color: #555;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
 .error {
   color: #d33;
 }

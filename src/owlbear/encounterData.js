@@ -46,6 +46,11 @@ export function mapUrl(encounter) {
   );
 }
 
+export function mapSourceId(encounter) {
+  const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
+  return map?.id ?? map?.artifactId ?? map?.payload?.id ?? mapUrl(encounter);
+}
+
 export function mapDpi(encounter) {
   const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
   const value =
@@ -76,10 +81,36 @@ export function monsterId(block) {
   return block.id ?? block.npcId ?? block.monsterId ?? block.npc?.id ?? block.monster?.id;
 }
 
+export function monsterSourceId(block) {
+  return (
+    block.artifactId ??
+    block.sourceId ??
+    block.id ??
+    block.npcId ??
+    block.monsterId ??
+    block.npc?.id ??
+    block.monster?.id ??
+    monsterName(block)
+  );
+}
+
 export function monsterCount(block) {
   const value = block.count ?? block.quantity ?? block.number ?? block.instances?.length ?? 1;
   const count = Number.parseInt(value, 10);
   return Number.isFinite(count) && count > 0 ? count : 1;
+}
+
+export function monsterStatBlock(block) {
+  return (
+    block.statBlock ??
+    block.content ??
+    block.description ??
+    block.payload?.statBlock ??
+    block.payload?.content ??
+    block.npc?.statBlock ??
+    block.monster?.statBlock ??
+    ""
+  );
 }
 
 function appendTokenOptions(url, options) {
