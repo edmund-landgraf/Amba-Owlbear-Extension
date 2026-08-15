@@ -187,7 +187,7 @@ The AMBA API should run as its own long-lived Linux service, separate from the e
 The extension expects AMBA endpoints such as:
 
 ```text
-GET  /api/dev/test-user/modules
+GET  /api/modules
 GET  /api/modules/:moduleId/pcs
 GET  /api/modules/:moduleId/encounters
 GET  /api/modules/:moduleId/encounters/:encounterId
@@ -196,7 +196,7 @@ POST /api/owlbear/export-queue/:queueItemId/complete
 POST /api/owlbear/export-queue/:queueItemId/fail
 ```
 
-For production, the dev-only module endpoint should eventually be replaced with authenticated user/module context.
+Module results should be scoped to `{current-user}` through authenticated user/module context.
 
 ## Systemd For AMBA API
 
@@ -333,7 +333,7 @@ curl -I https://edmundo.com/health
 4. Add deploy script or CI job that builds and publishes `dist/`.
 5. Add AMBA API health endpoint if one does not already exist.
 6. Add CORS entries for the production extension origin.
-7. Replace dev test-user module loading with authenticated production context.
+7. Confirm module loading is scoped to `{current-user}` through authenticated production context.
 8. Confirm Owlbear custom extension accepts and loads the production manifest URL.
 
 For the production current-module and queue UX, see [amba-owlbear-configuration-flow.md](./amba-owlbear-configuration-flow.md).

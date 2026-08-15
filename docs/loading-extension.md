@@ -104,7 +104,7 @@ POST /api/owlbear/export-queue/:queueItemId/fail
 
 The extension also supports a manual picker:
 
-1. Select a test-user module.
+1. Select a `{current-user}` module.
 2. Select an encounter.
 3. Click `Import encounter`.
 

@@ -10,30 +10,15 @@ function baseInitial(name) {
   return (words(name)[0]?.[0] ?? "M").toUpperCase();
 }
 
-function twoLetterBase(name, used) {
-  const parts = words(name);
-  const first = (parts[0]?.[0] ?? "M").toUpperCase();
-  const candidates = [
-    parts[1]?.[0],
-    parts[0]?.[1],
-    parts[0]?.[2],
-    parts[0]?.[3],
-  ]
-    .filter(Boolean)
-    .map((letter) => `${first}${letter.toLowerCase()}`);
-
-  for (const candidate of candidates) {
-    if (!used.has(candidate)) return candidate;
-  }
-
+function twoLetterBase(initial, used) {
   let suffix = "a".charCodeAt(0);
   while (suffix <= "z".charCodeAt(0)) {
-    const candidate = `${first}${String.fromCharCode(suffix)}`;
+    const candidate = `${initial}${String.fromCharCode(suffix)}`;
     if (!used.has(candidate)) return candidate;
     suffix += 1;
   }
 
-  return `${first}x`;
+  return `${initial}x`;
 }
 
 export function labelBaseForBlocks(blocks, getName) {
@@ -49,7 +34,7 @@ export function labelBaseForBlocks(blocks, getName) {
     const initial = baseInitial(name);
     if ((byInitial.get(initial) ?? 0) === 1) return initial;
 
-    const base = twoLetterBase(name, usedTwoLetterBases);
+    const base = twoLetterBase(initial, usedTwoLetterBases);
     usedTwoLetterBases.add(base);
     return base;
   });

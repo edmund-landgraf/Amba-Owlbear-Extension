@@ -8,7 +8,7 @@ The project is currently focused on the modern Owlbear Rodeo extension model. Ow
 
 - Loads as an Owlbear Rodeo action popover.
 - Connects to a local AMBA API during development.
-- Lists AMBA test-user modules.
+- Lists modules for the authenticated AMBA user.
 - Loads AMBA encounters from real endpoints when available, with a smoke-fixture fallback for local testing.
 - Analyzes the selected encounter before export:
   - map present or missing
@@ -68,7 +68,7 @@ The Vite dev server proxies AMBA API and upload requests to:
 http://localhost:5190
 ```
 
-AMBA must be running separately for real module/encounter data. The extension includes a local smoke fallback for the `Owlbear Smoke Mini Spine` fixture so the encounter UI can still be exercised when authenticated AMBA encounter endpoints are unavailable.
+AMBA must be running separately for real module/encounter data. Log in to AMBA in the same browser profile before opening the Owlbear extension so authenticated API requests can use the AMBA session. The extension includes a local smoke fallback for the `Owlbear Smoke Mini Spine` fixture so the encounter UI can still be exercised when authenticated AMBA encounter endpoints are unavailable.
 
 ## Loading In Owlbear Rodeo
 

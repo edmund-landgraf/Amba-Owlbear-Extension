@@ -35,6 +35,7 @@ export default defineConfig({
     },
   ],
   server: {
+    port: 5196,
     headers: {
       "Access-Control-Allow-Private-Network": "true",
     },

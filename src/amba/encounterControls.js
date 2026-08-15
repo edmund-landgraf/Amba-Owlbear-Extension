@@ -1,4 +1,4 @@
-import { getEncounter, getEncounters, getPcs } from "./ambaApi.js";
+import { getContainers, getEncounter, getPcs } from "./ambaApi.js";
 import { analyzeEncounterForExport, renderEncounterAnalysis } from "./encounterAnalysis.js";
 import { addEncounterToCurrentScene } from "../owlbear/encounterImporter.js";
 import { saveEncounterPlacementsToAmba } from "../owlbear/placementSync.js";
@@ -7,6 +7,8 @@ import { encounterImportSummary, encounterKey, encounterLabel, errorMessage } fr
 
 export function wireEncounterControls({
   modulePicker,
+  actPicker,
+  scenePicker,
   encounterPicker,
   importEncounter,
   saveEncounterPlacements,
@@ -17,9 +19,70 @@ export function wireEncounterControls({
   encounterStatus,
   encounterDiagnostics,
 }) {
-  let encounters = [];
+  let containers = [];
+  let encounterTargets = [];
   let loadedEncounter = null;
   let analysisRequestId = 0;
+
+  function containerType(container) {
+    return container?.containerType?.key ?? container?.containerTypeKey ?? container?.type ?? "";
+  }
+
+  function parentId(container) {
+    return container?.parentId ?? container?.parent?.id ?? null;
+  }
+
+  function childrenOf(containerId) {
+    return containers.filter((container) => parentId(container) === containerId);
+  }
+
+  function descendantsOf(containerId) {
+    const descendants = [];
+    const queue = childrenOf(containerId);
+    while (queue.length) {
+      const current = queue.shift();
+      descendants.push(current);
+      queue.push(...childrenOf(current.id));
+    }
+    return descendants;
+  }
+
+  function titleFor(container, fallback = "Untitled") {
+    return container?.title ?? container?.name ?? fallback;
+  }
+
+  function actSortValue(container) {
+    const text = `${container?.slug ?? ""} ${titleFor(container, "")}`;
+    const match = text.match(/\bact\D*(\d+)/i);
+    return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+  }
+
+  function preferActOne(acts) {
+    return acts.find((act) => actSortValue(act) === 1) ?? acts[0] ?? null;
+  }
+
+  function resetPicker(picker, text) {
+    picker.disabled = true;
+    picker.replaceChildren();
+    const option = document.createElement("option");
+    option.textContent = text;
+    picker.append(option);
+  }
+
+  function enablePicker(picker, items, valueFor, labelFor) {
+    picker.replaceChildren();
+    for (const item of items) {
+      const option = document.createElement("option");
+      option.value = valueFor(item);
+      option.textContent = labelFor(item);
+      picker.append(option);
+    }
+    picker.disabled = !items.length;
+  }
+
+  function syntheticActRootScene(actId) {
+    return { id: `act-root:${actId}`, title: "Act Root", syntheticActRoot: true, actId };
+  }
 
   function exportOptions() {
     return {
@@ -35,7 +98,7 @@ export function wireEncounterControls({
     const selectedEncounterId = encounterPicker.value;
     if (!moduleId || !selectedEncounterId) return null;
 
-    const selectedSummary = encounters.find(
+    const selectedSummary = encounterTargets.find(
       (encounter, index) => encounterKey(encounter, index) === selectedEncounterId
     );
     const fullEncounterId = selectedSummary?.id ?? selectedSummary?.encounterId ?? selectedSummary?.slug;
@@ -68,14 +131,14 @@ export function wireEncounterControls({
 
   async function loadEncountersForSelectedModule() {
     const moduleId = modulePicker.value;
+    loadedEncounter = null;
+    encounterTargets = [];
+    resetPicker(actPicker, moduleId ? "Loading acts..." : "Select an act first");
+    resetPicker(scenePicker, "Select an act first");
+    resetPicker(encounterPicker, "Select an act first");
     encounterPicker.disabled = true;
     importEncounter.disabled = true;
     if (saveEncounterPlacements) saveEncounterPlacements.disabled = true;
-    encounterPicker.replaceChildren();
-
-    const loading = document.createElement("option");
-    loading.textContent = moduleId ? "Loading encounters..." : "Select a module first";
-    encounterPicker.append(loading);
     encounterStatus.classList.remove("error");
     encounterStatus.textContent = "";
     if (encounterDiagnostics) encounterDiagnostics.textContent = "";
@@ -83,28 +146,23 @@ export function wireEncounterControls({
     if (!moduleId) return;
 
     try {
-      encounters = await getEncounters(moduleId);
-      encounterPicker.replaceChildren();
+      containers = await getContainers(moduleId);
+      const acts = containers.filter((container) => containerType(container) === "act");
 
-      if (!encounters.length) {
-        const empty = document.createElement("option");
-        empty.textContent = "No encounters found";
-        encounterPicker.append(empty);
+      if (!acts.length) {
+        resetPicker(actPicker, "No acts found");
+        resetPicker(scenePicker, "No scenes found");
+        resetPicker(encounterPicker, "No encounters found");
         return;
       }
 
-      for (const [index, encounter] of encounters.entries()) {
-        const option = document.createElement("option");
-        option.value = encounterKey(encounter, index);
-        option.textContent = encounterLabel(encounter);
-        encounterPicker.append(option);
-      }
-
-      encounterPicker.disabled = false;
-      importEncounter.disabled = false;
-      if (saveEncounterPlacements) saveEncounterPlacements.disabled = false;
-      await analyzeSelectedEncounter();
+      enablePicker(actPicker, acts, (act) => act.id, (act) => titleFor(act, "Untitled act"));
+      const selectedAct = preferActOne(acts);
+      if (selectedAct) actPicker.value = selectedAct.id;
+      await loadScenesForSelectedAct();
     } catch (error) {
+      resetPicker(actPicker, "Unable to load acts");
+      resetPicker(scenePicker, "Unable to load scenes");
       encounterPicker.replaceChildren();
       const failed = document.createElement("option");
       failed.textContent = "Unable to load encounters";
@@ -112,6 +170,67 @@ export function wireEncounterControls({
       encounterStatus.textContent = errorMessage(error, "Unable to load encounters.");
       encounterStatus.classList.add("error");
     }
+  }
+
+  async function loadScenesForSelectedAct() {
+    const selectedActId = actPicker.value;
+    loadedEncounter = null;
+    resetPicker(scenePicker, selectedActId ? "Loading scenes..." : "Select an act first");
+    resetPicker(encounterPicker, "Select a scene first");
+    importEncounter.disabled = true;
+    if (saveEncounterPlacements) saveEncounterPlacements.disabled = true;
+    if (encounterDiagnostics) encounterDiagnostics.textContent = "";
+
+    if (!selectedActId) return;
+
+    resetPicker(encounterPicker, "Select a scene first");
+    const directEncounters = childrenOf(selectedActId).filter((container) => containerType(container) === "encounter");
+    const scenes = childrenOf(selectedActId).filter((container) => containerType(container) === "scene");
+    const sceneChoices = directEncounters.length ? [syntheticActRootScene(selectedActId), ...scenes] : scenes;
+    if (!sceneChoices.length) {
+      resetPicker(scenePicker, "No scenes found");
+      resetPicker(encounterPicker, "No encounters found");
+      return;
+    }
+
+    enablePicker(scenePicker, sceneChoices, (scene) => scene.id, (scene) => titleFor(scene, "Untitled scene"));
+    await loadEncounterTargetsForSelectedScene();
+  }
+
+  async function loadEncounterTargetsForSelectedScene() {
+    const selectedSceneId = scenePicker.value;
+    loadedEncounter = null;
+    encounterTargets = [];
+    resetPicker(encounterPicker, selectedSceneId ? "Loading encounters..." : "Select a scene first");
+    importEncounter.disabled = true;
+    if (saveEncounterPlacements) saveEncounterPlacements.disabled = true;
+    if (encounterDiagnostics) encounterDiagnostics.textContent = "";
+
+    if (!selectedSceneId) return;
+
+    if (selectedSceneId.startsWith("act-root:")) {
+      const selectedActId = selectedSceneId.slice("act-root:".length);
+      encounterTargets = childrenOf(selectedActId).filter((container) => containerType(container) === "encounter");
+    } else {
+      encounterTargets = descendantsOf(selectedSceneId).filter((container) =>
+        ["subscene", "encounter"].includes(containerType(container))
+      );
+    }
+
+    if (!encounterTargets.length) {
+      resetPicker(encounterPicker, "No encounters found");
+      return;
+    }
+
+    enablePicker(
+      encounterPicker,
+      encounterTargets,
+      (encounter, index) => encounterKey(encounter, index),
+      (encounter) => encounterLabel(encounter, { omitSceneName: true, includeTypePrefix: true })
+    );
+    importEncounter.disabled = false;
+    if (saveEncounterPlacements) saveEncounterPlacements.disabled = false;
+    await analyzeSelectedEncounter();
   }
 
   importEncounter.addEventListener("click", async () => {
@@ -176,6 +295,14 @@ export function wireEncounterControls({
 
   modulePicker.addEventListener("change", () => {
     loadEncountersForSelectedModule();
+  });
+
+  actPicker.addEventListener("change", () => {
+    void loadScenesForSelectedAct();
+  });
+
+  scenePicker.addEventListener("change", () => {
+    void loadEncounterTargetsForSelectedScene();
   });
 
   encounterPicker.addEventListener("change", () => {

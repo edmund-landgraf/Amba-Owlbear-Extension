@@ -4,13 +4,19 @@ import { devSmokeEncounter, devSmokeEncounters } from "./devSmokeEncounter.js";
 // Keeping the base URL centralized makes it obvious where the local dev API
 // lives, and gives us one future place to swap localhost for production.
 const AMBA_BASE_URL = import.meta.env.VITE_AMBA_BASE_URL ?? "";
+const AMBA_AUTH_BASE_URL = import.meta.env.VITE_AMBA_BASE_URL || "http://localhost:5190";
+const OWLBEAR_AUTH_TOKEN_KEY = "amba.owlbear.authToken";
 
 function toApiUrl(path) {
-  return `${AMBA_BASE_URL}${path}`;
+  return `${AMBA_BASE_URL}${toExtensionApiPath(path)}`;
 }
 
 function toAssetUrl(path) {
   return new URL(path, AMBA_BASE_URL || window.location.origin).href;
+}
+
+function toAuthenticatedAssetUrl(path) {
+  return toAssetUrl(toExtensionApiPath(path));
 }
 
 // Small shared JSON helper for AMBA endpoints.
@@ -19,7 +25,11 @@ function toAssetUrl(path) {
 // surface as vague browser errors. This helper tries to extract AMBA's `{error}`
 // payload first, then falls back to the HTTP status.
 async function getJson(path) {
-  const response = await fetch(toApiUrl(path));
+  const headers = authHeaders();
+  const response = await fetch(toApiUrl(path), {
+    credentials: "include",
+    ...(headers ? { headers } : {}),
+  });
 
   if (!response.ok) {
     // Some AMBA errors are JSON, but CORS/network/server errors may not be.
@@ -45,11 +55,12 @@ async function fallbackToDevSmoke(moduleId, error) {
   throw error;
 }
 
-function flattenContainers(containers = []) {
+function flattenContainers(containers = [], parent = null) {
   const flattened = [];
   for (const container of containers) {
-    flattened.push(container);
-    flattened.push(...flattenContainers(container.children));
+    const containerWithParent = parent && !container.parent ? { ...container, parent } : container;
+    flattened.push(containerWithParent);
+    flattened.push(...flattenContainers(container.children, containerWithParent));
   }
   return flattened;
 }
@@ -82,11 +93,20 @@ function monsterBlockFromArtifact(artifact) {
 
 function normalizeEncounterContainer(container) {
   const metadata = container.metadata ?? {};
+  const parent = container.parent;
+  const parentType = parent?.containerType?.key ?? parent?.containerTypeKey ?? parent?.type;
+  const sceneName =
+    metadata.sceneName ??
+    metadata.sceneTitle ??
+    container.sceneName ??
+    container.sceneTitle ??
+    (parentType === "scene" || parentType === "subscene" ? parent?.title : undefined);
   const mapArtifact = firstArtifactOfType(container, "map");
   const mapPayload = mapArtifact?.payload ?? {};
   const monsterArtifacts = artifactsOfType(container, "monster_block");
   return {
     ...container,
+    sceneName,
     map: metadata.map ??
       container.map ??
       (mapArtifact
@@ -111,9 +131,11 @@ function normalizeEncounterContainer(container) {
 }
 
 async function postJson(path, body = {}) {
+  const headers = authHeaders({ "Content-Type": "application/json" });
   const response = await fetch(toApiUrl(path), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -125,12 +147,84 @@ async function postJson(path, body = {}) {
   return response.status === 204 ? null : response.json().catch(() => null);
 }
 
-// Dev-only module picker source.
+// Authenticated module picker source.
 //
-// Owlbear does not know which AMBA module the user is looking at, so the
-// extension asks the local dev API for modules owned by `test-user@localhost`.
-export function getTestUserModules() {
-  return getJson("/api/dev/test-user/modules");
+// The Owlbear extension should read AMBA as `{current-user}`,
+// not as the old dev-only user shortcut.
+export function getModules() {
+  return getJson("/api/modules");
+}
+
+export function getCurrentUser() {
+  return getJson("/api/auth/me");
+}
+
+export function startOwlbearAuth() {
+  const url = new URL("/api/owlbear/extension/auth/start", AMBA_AUTH_BASE_URL);
+  url.searchParams.set("targetOrigin", window.location.origin);
+  window.open(url.href, "amba-owlbear-auth", "popup,width=520,height=420");
+}
+
+export function storeOwlbearAuthToken(token) {
+  localStorage.setItem(OWLBEAR_AUTH_TOKEN_KEY, token);
+}
+
+export function isTrustedOwlbearAuthOrigin(origin) {
+  return origin === new URL(AMBA_AUTH_BASE_URL).origin;
+}
+
+function authHeaders(base = {}) {
+  const token = localStorage.getItem(OWLBEAR_AUTH_TOKEN_KEY);
+  return token ? { ...base, Authorization: `Bearer ${token}` } : Object.keys(base).length ? base : null;
+}
+
+export function authFetchOptions(base = {}) {
+  const headers = authHeaders(base.headers ?? {});
+  return {
+    ...base,
+    credentials: base.credentials ?? "include",
+    ...(headers ? { headers } : {}),
+  };
+}
+
+export function authFetchOptionsForUrl(url, base = {}) {
+  const parsedUrl = new URL(url, window.location.origin);
+  const ambaOrigin = new URL(AMBA_BASE_URL || window.location.origin).origin;
+  if (parsedUrl.origin !== ambaOrigin || !parsedUrl.pathname.startsWith("/api/")) {
+    return base;
+  }
+
+  return authFetchOptions(base);
+}
+
+function toExtensionApiPath(path) {
+  if (!localStorage.getItem(OWLBEAR_AUTH_TOKEN_KEY)) return path;
+
+  if (path === "/api/auth/me") return "/api/owlbear/extension/auth/me";
+  if (path === "/api/modules") return "/api/owlbear/extension/modules";
+
+  const pcMatch = path.match(/^\/api\/modules\/([^/]+)\/pcs$/);
+  if (pcMatch) return `/api/owlbear/extension/modules/${pcMatch[1]}/pcs`;
+
+  const pcAssetMatch = path.match(/^\/api\/modules\/([^/]+)\/pcs\/([^/]+)\/(token\.svg|note\.svg|sheet\.png)$/);
+  if (pcAssetMatch) {
+    const [, moduleId, pcId, assetName] = pcAssetMatch;
+    return `/api/owlbear/extension/modules/${moduleId}/pcs/${pcId}/${assetName}`;
+  }
+
+  const npcTokenMatch = path.match(/^\/api\/modules\/([^/]+)\/npcs\/([^/]+)\/token\.svg$/);
+  if (npcTokenMatch) {
+    const [, moduleId, npcId] = npcTokenMatch;
+    return `/api/owlbear/extension/modules/${moduleId}/npcs/${npcId}/token.svg`;
+  }
+
+  const containersMatch = path.match(/^\/api\/modules\/([^/]+)\/containers(?:\/([^/]+))?$/);
+  if (containersMatch) {
+    const [, moduleId, containerId] = containersMatch;
+    return `/api/owlbear/extension/modules/${moduleId}/containers${containerId ? `/${containerId}` : ""}`;
+  }
+
+  return path;
 }
 
 // Fetch all PCs for the selected module. The API includes narratives and
@@ -154,6 +248,10 @@ export function getEncounters(moduleId) {
       return fallbackToDevSmoke(moduleId, fallbackError);
     }
   });
+}
+
+export function getContainers(moduleId) {
+  return getJson(`/api/modules/${encodeURIComponent(moduleId)}/containers`);
 }
 
 // Fetch one full encounter, including map and monster block details when AMBA
@@ -207,7 +305,7 @@ export function saveOwlbearPlacements(moduleId, encounterId, payload) {
 // trap here. AMBA-hosted URLs stay short and valid.
 export function getPcSheetImageUrl(moduleId, pcId, color) {
   const url = new URL(
-    `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/sheet.png`,
+    toExtensionApiPath(`/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/sheet.png`),
     AMBA_BASE_URL || window.location.origin
   );
   // The API uses this color as an accent when rendering the sheet image.
@@ -222,7 +320,7 @@ export function getPcSheetImageUrl(moduleId, pcId, color) {
 // asset uploads.
 export function getPcTokenImageUrl(moduleId, pcId, color) {
   const url = new URL(
-    `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/token.svg`,
+    toExtensionApiPath(`/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/token.svg`),
     AMBA_BASE_URL || window.location.origin
   );
   // The color query parameter lets the importer rotate token colors per PC.
@@ -235,7 +333,7 @@ export function getPcTokenImageUrl(moduleId, pcId, color) {
 // that instead.
 export function getMonsterTokenImageUrl(moduleId, monsterId, color, options = {}) {
   const url = new URL(
-    `/api/modules/${encodeURIComponent(moduleId)}/npcs/${encodeURIComponent(monsterId)}/token.svg`,
+    toExtensionApiPath(`/api/modules/${encodeURIComponent(moduleId)}/npcs/${encodeURIComponent(monsterId)}/token.svg`),
     AMBA_BASE_URL || window.location.origin
   );
   if (color) url.searchParams.set("color", color);
@@ -250,7 +348,7 @@ export function getMonsterTokenImageUrl(moduleId, monsterId, color, options = {}
 // but it remains useful for experiments or image-backed note imports.
 export function getPcNoteImageUrl(moduleId, pcId, color) {
   const url = new URL(
-    `/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/note.svg`,
+    toExtensionApiPath(`/api/modules/${encodeURIComponent(moduleId)}/pcs/${encodeURIComponent(pcId)}/note.svg`),
     AMBA_BASE_URL || window.location.origin
   );
   // The color query parameter matches the generated token color.
@@ -262,7 +360,7 @@ export function getPcNoteImageUrl(moduleId, pcId, color) {
 // Portrait metadata may come back as a relative path, while Owlbear item images
 // require absolute URLs.
 export function toAmbaUrl(path) {
-  return toAssetUrl(path);
+  return toAuthenticatedAssetUrl(path);
 }
 
 // Convenience URL for opening the selected AMBA module in the normal AMBA UI.

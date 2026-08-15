@@ -1,4 +1,4 @@
-import { getPcs, getTestUserModules } from "./ambaApi.js";
+import { getModules, getPcs } from "./ambaApi.js";
 import { wireEncounterControls } from "./encounterControls.js";
 import { wireExportQueueControls } from "./exportQueueControls.js";
 import { errorMessage, renderPcButtons } from "./uiHelpers.js";
@@ -15,6 +15,8 @@ export async function wirePcLoader() {
   const modulePicker = document.getElementById("modulePicker");
   const loadPcs = document.getElementById("loadPcs");
   const importSheetImages = document.getElementById("importSheetImages");
+  const actPicker = document.getElementById("actPicker");
+  const scenePicker = document.getElementById("scenePicker");
   const encounterPicker = document.getElementById("encounterPicker");
   const importEncounter = document.getElementById("importEncounter");
   const importQueuedExports = document.getElementById("importQueuedExports");
@@ -34,6 +36,8 @@ export async function wirePcLoader() {
   // rest of the module metadata if we need it later.
   const encounterControls = wireEncounterControls({
     modulePicker,
+    actPicker,
+    scenePicker,
     encounterPicker,
     importEncounter,
     saveEncounterPlacements,
@@ -129,10 +133,8 @@ export async function wirePcLoader() {
   });
 
   try {
-    // Populate the module picker from the dev test-user endpoint. This keeps
-    // the extension usable inside Owlbear without doing AMBA OAuth inside the
-    // embedded iframe.
-    const modules = await getTestUserModules();
+    // Populate the module picker as the currently logged-in AMBA user.
+    const modules = await getModules();
     modulePicker.replaceChildren();
 
     // Include PC/NPC counts in the option label so the picker gives enough
@@ -145,9 +147,9 @@ export async function wirePcLoader() {
     }
 
     if (!modules.length) {
-      // Disable the workflow politely if the dev API has no test-user modules.
+      // Disable the workflow politely if the authenticated user has no modules.
       const option = document.createElement("option");
-      option.textContent = "No test-user modules found";
+      option.textContent = "No AMBA modules found";
       modulePicker.append(option);
       return;
     }

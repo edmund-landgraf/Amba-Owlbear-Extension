@@ -10,7 +10,7 @@ During development, it is useful for the Owlbear extension to access any test mo
 
 Current debug behavior:
 
-- Extension loads test-user modules.
+- Extension loads `{current-user}` modules.
 - Extension shows a module dropdown.
 - GM can choose a module.
 - GM can browse encounters for that module.
@@ -130,14 +130,14 @@ Debug mode is for local development.
 Behavior:
 
 - Show module dropdown.
-- Load modules from the dev/test endpoint.
+- Load modules for `{current-user}`.
 - Allow manual encounter browsing.
 - Allow direct test imports.
 
 Current debug endpoint:
 
 ```text
-GET /api/dev/test-user/modules
+GET /api/modules
 ```
 
 Debug mode should remain available because it is useful while building and testing the extension.
@@ -284,7 +284,7 @@ Production startup:
 Debug startup:
 
 1. Render debug UI.
-2. Load test-user modules.
+2. Load `{current-user}` modules.
 3. Enable module dropdown.
 4. Enable manual encounter picker.
 

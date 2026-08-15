@@ -568,12 +568,12 @@ Rules:
 
 1. Queue endpoints must be authenticated.
 2. Queue results must be scoped to the AMBA user/module/session.
-3. Production should not expose the dev test-user module endpoint.
+3. Production should scope module access to `{current-user}`.
 4. CORS should allow Owlbear extension origins, not arbitrary origins.
 5. Read-only server config should not leak secrets.
 6. Health checks should report booleans/statuses, not private deployment paths.
 
-For local development, test users and permissive localhost behavior are acceptable. For production, the Owlbear settings page should make the active auth mode explicit.
+For local development, permissive localhost behavior is acceptable. For production, the Owlbear settings page should make the active `{current-user}` auth mode explicit.
 
 ## What Is Read-Only Versus Editable
 
@@ -620,7 +620,7 @@ Read-only in AMBA:
 - Right-clicking an AMBA encounter can add it to the queue.
 - The Owlbear extension can load config and queue data without showing every AMBA module.
 - If placement sync is enabled, AMBA can receive saved token positions from the extension.
-- Production mode does not expose test-user/debug module access.
+- Production mode does not expose debug module access beyond `{current-user}`.
 
 ## Related Docs
 

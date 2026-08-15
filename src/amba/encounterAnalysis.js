@@ -7,6 +7,7 @@ import {
   monsterBlocks,
   monsterCount,
 } from "../owlbear/encounterData.js";
+import { inferMapGrid } from "../owlbear/mapGridInference.js";
 
 function mapGrid(encounter) {
   const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
@@ -19,9 +20,11 @@ function gridSummary(grid, dpi) {
   const rows = Number.parseInt(grid?.rows, 10);
   const size = Number.parseInt(grid?.cellSize ?? dpi, 10);
   const parts = [];
-  if (Number.isFinite(size) && size > 0) parts.push(`${size}px/square`);
+  if (Number.isFinite(size) && size > 0) parts.push(`${Math.round(size)}px/square`);
   if (Number.isFinite(columns) && Number.isFinite(rows)) parts.push(`${columns} x ${rows} squares`);
   if (scale) parts.push(`1 square = ${scale}`);
+  if (grid?.source === "inferred") parts.push("inferred from image");
+  if (grid?.source === "metadata") parts.push("from AMBA metadata");
   return parts.join(", ") || "Grid metadata not supplied";
 }
 
@@ -56,6 +59,11 @@ export async function analyzeEncounterForExport(encounter) {
       dpi
     );
     result.mapReady = true;
+    const inferredGrid = await inferMapGrid(info, grid);
+    if (inferredGrid) {
+      info.grid.dpi = inferredGrid.cellSize;
+      result.mapGridSummary = gridSummary(inferredGrid, inferredGrid.cellSize);
+    }
     result.mapImage = {
       width: info.image.width,
       height: info.image.height,

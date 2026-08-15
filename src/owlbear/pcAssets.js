@@ -11,6 +11,7 @@ import {
   rasterizeSvgFile,
   safeName,
 } from "./imageUtils.js";
+import { rasterizedTokenInfo } from "./tokenImage.js";
 
 export const TOKEN_COLOR = "#7c3aed";
 
@@ -56,11 +57,7 @@ export async function tokenInfo(moduleId, pc, color = TOKEN_COLOR) {
   }
 
   const url = getPcTokenImageUrl(moduleId, pc.id, color);
-  return {
-    file: await fetchImageBlob(url, `${safeName(pc.name)}-token.svg`),
-    image: { width: 512, height: 512, url, mime: "image/svg+xml" },
-    grid: { dpi: 512, offset: { x: 256, y: 256 } },
-  };
+  return rasterizedTokenInfo(url, `${safeName(pc.name)}-token`);
 }
 
 export async function generatedTokenUpload(moduleId, moduleTitle, pc, color = TOKEN_COLOR) {

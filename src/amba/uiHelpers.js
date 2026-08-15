@@ -1,6 +1,11 @@
 export function errorMessage(error, fallback) {
   console.error(fallback, error);
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message) {
+    if (/Not authenticated/i.test(error.message)) {
+      return "Not authenticated. Click Connect AMBA, approve the popup, then the extension will reload.";
+    }
+    return error.message;
+  }
   if (typeof error === "string" && error) return error;
   try {
     const json = JSON.stringify(error);
@@ -27,14 +32,60 @@ export function renderPcButtons(container, pcs) {
   }
 }
 
-export function encounterLabel(encounter) {
+export function encounterLabel(encounter, options = {}) {
   const title = encounter.title ?? encounter.name ?? "Untitled encounter";
+  const sceneName = encounterSceneName(encounter);
+  const typePrefix = options.includeTypePrefix ? encounterTypePrefix(encounter) : "";
+  const titledWithScene =
+    !options.omitSceneName &&
+    sceneName &&
+    !title.toLocaleLowerCase().endsWith(`(${sceneName.toLocaleLowerCase()})`)
+      ? `${title} (${sceneName})`
+      : title;
+  const titledWithType = typePrefix ? `${typePrefix} ${titledWithScene}` : titledWithScene;
   const monsters = encounter._count?.monsters ?? encounter.monsterCount ?? encounter.monsters?.length;
-  return monsters ? `${title} (${monsters} monsters)` : title;
+  return monsters ? `${titledWithType} (${monsters} monsters)` : titledWithType;
 }
 
 export function encounterKey(encounter, index) {
   return encounter.id ?? encounter.encounterId ?? encounter.slug ?? String(index);
+}
+
+function encounterSceneName(encounter) {
+  const metadata = encounter.metadata ?? {};
+  const parent = encounter.parent;
+  const parentType = parent?.containerType?.key ?? parent?.containerTypeKey ?? parent?.type;
+  return (
+    encounter.sceneName ??
+    encounter.sceneTitle ??
+    encounter.sourceSceneName ??
+    encounter.sourceSceneTitle ??
+    metadata.sceneName ??
+    metadata.sceneTitle ??
+    metadata.sourceSceneName ??
+    metadata.sourceSceneTitle ??
+    (parentType === "scene" || parentType === "subscene" ? parent?.title : undefined)
+  );
+}
+
+function encounterTypePrefix(encounter) {
+  const metadata = encounter.metadata ?? {};
+  const rawType =
+    encounter.encounterType ??
+    encounter.encounterTypeKey ??
+    encounter.typeKey ??
+    metadata.encounterType ??
+    metadata.encounterTypeKey ??
+    metadata.type ??
+    (Array.isArray(metadata.tags) ? metadata.tags[0] : undefined);
+  if (typeof rawType !== "string" || !rawType.trim()) return "";
+
+  const type = rawType.trim().replace(/[_-]+/g, " ").toLocaleLowerCase();
+  const title = encounter.title ?? encounter.name ?? "";
+  if (title.toLocaleLowerCase().startsWith(`${type} `) || title.toLocaleLowerCase().startsWith(`${type} -`)) {
+    return "";
+  }
+  return `(${type})`;
 }
 
 export function encounterImportSummary(result) {

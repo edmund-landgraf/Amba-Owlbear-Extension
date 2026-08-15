@@ -8,12 +8,15 @@ export function renderAppShell() {
 
       <section class="panel">
         <h2>Prototype</h2>
-        <button id="testRoom">Test Room Access</button>
+        <button id="testRoom">Test Owlbear Scene</button>
+        <button id="testAmbaAuth">Test AMBA Auth</button>
+        <button id="connectAmba">Connect AMBA</button>
+        <p id="ambaAuthStatus" aria-live="polite"></p>
       </section>
 
       <section class="panel">
         <h2>AMBA PCs</h2>
-        <label class="field-label" for="modulePicker">Test-user module</label>
+        <label class="field-label" for="modulePicker">{current-user} module</label>
         <select id="modulePicker" disabled>
           <option>Loading modules...</option>
         </select>
@@ -25,9 +28,17 @@ export function renderAppShell() {
 
       <section class="panel">
         <h2>AMBA Encounters</h2>
+        <label class="field-label" for="actPicker">Act</label>
+        <select id="actPicker" disabled>
+          <option>Select an act first</option>
+        </select>
+        <label class="field-label" for="scenePicker">Scene</label>
+        <select id="scenePicker" disabled>
+          <option>Select an act first</option>
+        </select>
         <label class="field-label" for="encounterPicker">Encounter</label>
         <select id="encounterPicker" disabled>
-          <option>Select a module first</option>
+          <option>Select an act first</option>
         </select>
         <fieldset class="option-group">
           <legend>Export Options</legend>

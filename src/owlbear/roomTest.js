@@ -11,7 +11,7 @@ export function wireRoomTest() {
                 return;
             }
 
-            await show("AMBA can access this scene.");
+            await show("AMBA extension can access this Owlbear scene.");
         });
 
 }

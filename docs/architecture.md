@@ -417,7 +417,7 @@ Wires the AMBA PC panel and module picker.
 
 Responsibilities:
 
-- Load test-user modules from AMBA.
+- Load `{current-user}` modules from AMBA.
 - Populate the module picker.
 - Default to the first module with PCs.
 - Handle "Load all PCs".
@@ -471,9 +471,9 @@ const AMBA_BASE_URL = "http://localhost:5190";
 
 Current JSON endpoints:
 
-- `getTestUserModules()`
-  - `GET /api/dev/test-user/modules`
-  - Dev-only module picker source.
+- `getModules()`
+  - `GET /api/modules`
+  - Authenticated `{current-user}` module picker source.
 
 - `getPcs(moduleId)`
   - `GET /api/modules/:moduleId/pcs`
