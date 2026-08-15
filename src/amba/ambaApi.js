@@ -42,17 +42,58 @@ function flattenContainers(containers = []) {
   return flattened;
 }
 
+function artifactTypeKey(artifact) {
+  return artifact?.artifactType?.key ?? artifact?.artifactTypeKey ?? artifact?.type;
+}
+
+function firstArtifactOfType(container, type) {
+  return (container.artifacts ?? []).find((artifact) => artifactTypeKey(artifact) === type);
+}
+
+function artifactsOfType(container, type) {
+  return (container.artifacts ?? []).filter((artifact) => artifactTypeKey(artifact) === type);
+}
+
+function monsterBlockFromArtifact(artifact) {
+  const payload = artifact.payload ?? {};
+  return {
+    id: artifact.id,
+    artifactId: artifact.id,
+    name: artifact.title ?? payload.name,
+    title: artifact.title,
+    quantity: payload.quantity ?? payload.count ?? 1,
+    level: payload.level,
+    source: payload.source,
+    statBlock: payload.content ?? payload.statBlock,
+  };
+}
+
 function normalizeEncounterContainer(container) {
   const metadata = container.metadata ?? {};
+  const mapArtifact = firstArtifactOfType(container, "map");
+  const mapPayload = mapArtifact?.payload ?? {};
+  const monsterArtifacts = artifactsOfType(container, "monster_block");
   return {
     ...container,
-    map: metadata.map ?? container.map,
+    map: metadata.map ??
+      container.map ??
+      (mapArtifact
+        ? {
+            id: mapArtifact.id,
+            title: mapArtifact.title,
+            url: mapPayload.url,
+            imageUrl: mapPayload.imageUrl,
+            payload: mapPayload,
+            grid: mapPayload.grid,
+          }
+        : undefined),
     mapUrl: metadata.mapUrl ?? container.mapUrl,
     monsterBlocks:
       metadata.monsterBlocks ??
       metadata.monsters ??
       container.monsterBlocks ??
       container.monsters ??
+      (monsterArtifacts.length ? monsterArtifacts.map(monsterBlockFromArtifact) : null) ??
       [],
   };
 }

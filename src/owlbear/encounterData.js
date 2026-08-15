@@ -1,4 +1,5 @@
 import { getMonsterTokenImageUrl, toAmbaUrl } from "../amba/ambaApi.js";
+import { monsterTokenSvgUrl } from "./tokenSvg.js";
 
 export const TOKEN_COLORS = [
   "#7c3aed",
@@ -43,6 +44,18 @@ export function mapUrl(encounter) {
     encounter.mapImageUrl,
     encounter.imageUrl
   );
+}
+
+export function mapDpi(encounter) {
+  const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
+  const value =
+    map?.grid?.cellSize ??
+    map?.payload?.grid?.cellSize ??
+    map?.dpi ??
+    encounter.mapDpi ??
+    encounter.grid?.cellSize;
+  const dpi = Number.parseInt(value, 10);
+  return Number.isFinite(dpi) && dpi > 0 ? dpi : undefined;
 }
 
 export function monsterBlocks(encounter) {
@@ -94,5 +107,12 @@ export function monsterTokenUrl(moduleId, block, color, options = {}) {
   if (explicit) return appendTokenOptions(explicit, options);
 
   const id = monsterId(block);
-  return id ? getMonsterTokenImageUrl(moduleId, id, color, options) : null;
+  if (block.useAmbaTokenEndpoint && id) return getMonsterTokenImageUrl(moduleId, id, color, options);
+
+  return monsterTokenSvgUrl({
+    label: options.label,
+    name: monsterName(block),
+    color,
+    fontSize: options.fontSize,
+  });
 }

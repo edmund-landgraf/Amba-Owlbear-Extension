@@ -4,6 +4,7 @@ import { addItemsToCurrentScene } from "./sceneItems.js";
 import {
   encounterId,
   encounterTitle,
+  mapDpi,
   mapUrl,
   monsterBlocks,
   monsterCount,
@@ -28,7 +29,12 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds }) {
   const url = mapUrl(encounter);
   if (!url) return null;
 
-  const info = await imageInfoFromUrl(url, `${safeName(encounterTitle(encounter), "encounter")}-map`);
+  const info = await imageInfoFromUrl(
+    url,
+    `${safeName(encounterTitle(encounter), "encounter")}-map`,
+    "image/png",
+    mapDpi(encounter)
+  );
   const position = imagePositionRightOfBounds(occupiedBounds, info, 1000);
   const item = buildImage(info.image, info.grid)
     .name(`${encounterTitle(encounter)} Map`)

@@ -31,7 +31,7 @@ export async function wirePcLoader() {
     importEncounter,
     encounterStatus,
   });
-  wireExportQueueControls({ importQueuedExports, encounterStatus });
+  wireExportQueueControls({ importQueuedExports, modulePicker, encounterPicker, encounterStatus });
 
   // Main import button: fetch PCs, list their names, then drop token+note pairs
   // directly into the currently open Owlbear scene.
@@ -128,11 +128,12 @@ export async function wirePcLoader() {
       return;
     }
 
-    // Default to the first module that actually has PCs, because that is the
-    // most useful starting point when testing the importer.
+    // Prefer the purpose-built no-PC Owlbear smoke module when present, then
+    // fall back to the first module with PCs for the older importer flow.
+    const smokeModule = modules.find((module) => /owlbear smoke/i.test(module.title));
     const firstModuleWithPcs = modules.find((module) => module._count.pcs > 0);
-    if (firstModuleWithPcs) {
-      modulePicker.value = firstModuleWithPcs.id;
+    if (smokeModule || firstModuleWithPcs) {
+      modulePicker.value = (smokeModule ?? firstModuleWithPcs).id;
     }
 
     // Only enable actions after modules are loaded; before this, the selected

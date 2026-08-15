@@ -34,14 +34,42 @@ async function resolveEncounter(item) {
   return getEncounter(moduleId, encounterId);
 }
 
-export function wireExportQueueControls({ importQueuedExports, encounterStatus }) {
+function missingQueueEndpoint(error) {
+  return error instanceof Error && /AMBA request failed:\s*404|Cannot GET/i.test(error.message);
+}
+
+function selectedEncounterQueue(modulePicker, encounterPicker) {
+  const moduleId = modulePicker?.value;
+  const encounterId = encounterPicker?.value;
+  if (!moduleId || !encounterId || encounterPicker?.disabled) return [];
+
+  return [
+    {
+      id: `dev-selected-${moduleId}-${encounterId}`,
+      moduleId,
+      encounterId,
+      devFallback: true,
+    },
+  ];
+}
+
+async function loadQueue({ modulePicker, encounterPicker }) {
+  try {
+    return await getOwlbearExportQueue();
+  } catch (error) {
+    if (!missingQueueEndpoint(error)) throw error;
+    return selectedEncounterQueue(modulePicker, encounterPicker);
+  }
+}
+
+export function wireExportQueueControls({ importQueuedExports, modulePicker, encounterPicker, encounterStatus }) {
   importQueuedExports.addEventListener("click", async () => {
     encounterStatus.classList.remove("error");
     encounterStatus.textContent = "Loading queued AMBA exports...";
 
     try {
       importQueuedExports.disabled = true;
-      const queue = await getOwlbearExportQueue();
+      const queue = await loadQueue({ modulePicker, encounterPicker });
       const items = Array.isArray(queue) ? queue : queue?.items ?? [];
 
       if (!items.length) {
@@ -63,14 +91,16 @@ export function wireExportQueueControls({ importQueuedExports, encounterStatus }
           imported += 1;
           tokenCount += result.monsterTokensImported;
           if (result.mapImported) mapCount += 1;
-          await completeOwlbearExport(id, {
-            encounter: encounterTitle(encounter),
-            mapImported: result.mapImported,
-            monsterTokensImported: result.monsterTokensImported,
-          });
+          if (!item.devFallback) {
+            await completeOwlbearExport(id, {
+              encounter: encounterTitle(encounter),
+              mapImported: result.mapImported,
+              monsterTokensImported: result.monsterTokensImported,
+            });
+          }
         } catch (error) {
           failed += 1;
-          await failOwlbearExport(id, error).catch(() => null);
+          if (!item.devFallback) await failOwlbearExport(id, error).catch(() => null);
         }
       }
 
