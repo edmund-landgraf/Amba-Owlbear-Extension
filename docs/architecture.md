@@ -940,6 +940,8 @@ For Owlbear loading instructions, see [loading-extension.md](./loading-extension
 
 For the always-on Linux production hosting plan, see [linux-production-hosting.md](./linux-production-hosting.md).
 
+For player join and token control testing, see [player-join-token-control-test.md](./player-join-token-control-test.md).
+
 Common commands:
 
 ```bash

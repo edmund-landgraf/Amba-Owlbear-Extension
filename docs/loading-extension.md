@@ -83,6 +83,8 @@ If no scene is open, the extension should report:
 No active scene.
 ```
 
+For a two-browser GM/player test plan, see [player-join-token-control-test.md](./player-join-token-control-test.md).
+
 ## AMBA Export Queue Flow
 
 The intended AMBA-driven flow is:
