@@ -1008,6 +1008,8 @@ For player join and token control testing, see [player-join-token-control-test.m
 
 For AMBA-side Owlbear configuration and production queue behavior, see [amba-owlbear-configuration-flow.md](./amba-owlbear-configuration-flow.md).
 
+For remembering Owlbear token positions in AMBA and future upsert imports, see [placement-sync-upsert-guide.md](./placement-sync-upsert-guide.md).
+
 Common commands:
 
 ```bash
