@@ -15,33 +15,29 @@ For the always-on Linux production hosting plan, see [linux-production-hosting.m
 From the repository root:
 
 ```bash
-npm.cmd run dev
+npm.cmd run dev:owlbear
 ```
 
-Vite normally starts on:
+The Owlbear dev server starts on:
 
 ```text
-http://localhost:5173/
+http://localhost:5196/
 ```
 
 The Owlbear extension manifest will be available at:
 
 ```text
-http://localhost:5173/manifest.json
+http://localhost:5196/manifest.json
 ```
 
-If Vite picks a different port, use that port in the manifest URL.
+Use this URL when adding the local development extension to Owlbear Rodeo.
 
 If Owlbear needs to reach the extension from another device or network context, start Vite with an explicit host:
 
-```bash
-npm.cmd run dev -- --host 0.0.0.0
-```
-
-Then use the machine's LAN URL, for example:
+The `dev:owlbear` script already binds to `0.0.0.0`, so another device can use the machine's LAN URL, for example:
 
 ```text
-http://192.168.1.25:5173/manifest.json
+http://192.168.1.25:5196/manifest.json
 ```
 
 ## Add The Extension In Owlbear
@@ -52,7 +48,7 @@ http://192.168.1.25:5173/manifest.json
 4. Paste the manifest URL:
 
    ```text
-   http://localhost:5173/manifest.json
+   http://localhost:5196/manifest.json
    ```
 
 5. Add/install the extension.

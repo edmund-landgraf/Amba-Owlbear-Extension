@@ -7,10 +7,10 @@ This document describes how to host the AMBA Owlbear extension on the production
 During development, the extension is loaded from a local Vite dev server:
 
 ```text
-http://localhost:5173/manifest.json
+http://localhost:5196/manifest.json
 ```
 
-That works only while the dev machine is awake and `npm.cmd run dev` is running. If Owlbear Rodeo tries to load the extension later and that dev server is offline, Owlbear reports that the extension cannot be loaded.
+That works only while the dev machine is awake and `npm.cmd run dev:owlbear` is running. If Owlbear Rodeo tries to load the extension later and that dev server is offline, Owlbear reports that the extension cannot be loaded.
 
 For production, the extension URL must point to an always-on host.
 
