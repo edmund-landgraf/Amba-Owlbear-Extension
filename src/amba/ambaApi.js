@@ -29,6 +29,34 @@ async function getJson(path) {
   return response.json();
 }
 
+function isMissingEndpoint(error) {
+  return error instanceof Error && /AMBA request failed:\s*404|Cannot GET/i.test(error.message);
+}
+
+function flattenContainers(containers = []) {
+  const flattened = [];
+  for (const container of containers) {
+    flattened.push(container);
+    flattened.push(...flattenContainers(container.children));
+  }
+  return flattened;
+}
+
+function normalizeEncounterContainer(container) {
+  const metadata = container.metadata ?? {};
+  return {
+    ...container,
+    map: metadata.map ?? container.map,
+    mapUrl: metadata.mapUrl ?? container.mapUrl,
+    monsterBlocks:
+      metadata.monsterBlocks ??
+      metadata.monsters ??
+      container.monsterBlocks ??
+      container.monsters ??
+      [],
+  };
+}
+
 async function postJson(path, body = {}) {
   const response = await fetch(toApiUrl(path), {
     method: "POST",
@@ -61,7 +89,14 @@ export function getPcs(moduleId) {
 // Fetch encounter summaries for the selected module. The extension keeps the
 // payload flexible because AMBA encounter data is still evolving.
 export function getEncounters(moduleId) {
-  return getJson(`/api/modules/${encodeURIComponent(moduleId)}/encounters`);
+  return getJson(`/api/modules/${encodeURIComponent(moduleId)}/encounters`).catch(async (error) => {
+    if (!isMissingEndpoint(error)) throw error;
+
+    const module = await getJson(`/api/modules/${encodeURIComponent(moduleId)}`);
+    return flattenContainers(module.containers)
+      .filter((container) => container.containerType?.key === "encounter")
+      .map(normalizeEncounterContainer);
+  });
 }
 
 // Fetch one full encounter, including map and monster block details when AMBA
@@ -69,7 +104,14 @@ export function getEncounters(moduleId) {
 export function getEncounter(moduleId, encounterId) {
   return getJson(
     `/api/modules/${encodeURIComponent(moduleId)}/encounters/${encodeURIComponent(encounterId)}`
-  );
+  ).catch(async (error) => {
+    if (!isMissingEndpoint(error)) throw error;
+
+    const container = await getJson(
+      `/api/modules/${encodeURIComponent(moduleId)}/containers/${encodeURIComponent(encounterId)}`
+    );
+    return normalizeEncounterContainer(container);
+  });
 }
 
 // Queue consumed by the Owlbear extension. AMBA pushes into this queue when the
