@@ -226,12 +226,12 @@ function monsterTypeGroups(encounter) {
 }
 
 function tokenBaseFontSize(label, tokenSize) {
-  const ratio = label.length <= 1 ? 0.5 : label.length === 2 ? 0.4 : 0.32;
+  const ratio = label.length <= 1 ? 0.48 : label.length === 2 ? 0.38 : 0.3;
   return Math.max(18, Math.round(tokenSize * ratio));
 }
 
 function tokenSubscriptFontSize(tokenSize) {
-  return Math.max(14, Math.round(tokenSize * 0.24));
+  return Math.max(12, Math.round(tokenSize * 0.2));
 }
 
 function tokenLabelText(label) {
@@ -241,6 +241,13 @@ function tokenLabelText(label) {
       children: [{ text: label, bold: true }],
     },
   ];
+}
+
+function centeredBoxPosition(position, width, height, inset = { x: 0, y: 0 }) {
+  return {
+    x: position.x + inset.x - width / 2,
+    y: position.y + inset.y - height / 2,
+  };
 }
 
 function encounterMapGrid(encounter) {
@@ -276,13 +283,14 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems
   if (inferredGrid) {
     info.grid.dpi = inferredGrid.cellSize;
   }
+  const mapImage = { ...info.image, url };
   const position = imagePositionRightOfBounds(occupiedBounds, info, 1000);
-  const item = buildImage(info.image, info.grid)
+  const item = buildImage(mapImage, info.grid)
     .name(`${encounterTitle(encounter)} Map`)
     .description(`AMBA encounter map for ${encounterTitle(encounter)}`)
     .layer("MAP")
     .position(position)
-    .locked(true)
+    .locked(false)
     .metadata({
       ...encounterItemMetadata({
         moduleId,
@@ -310,9 +318,10 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin, importedIte
     const color = TOKEN_COLORS[groupIndex % TOKEN_COLORS.length];
     const name = monsterName(block);
     const labelBase = labelBases[groupIndex];
-    const tokenSize = Math.round(gridDpi * pf2eSpaceMultiplier(monsterSize(block)));
-    const labelWidth = Math.max(tokenSize * 0.7, tokenSize - gridDpi * 0.18);
-    const labelHeight = Math.max(tokenSize * 0.35, tokenSize * 0.44);
+    const footprintSize = Math.round(gridDpi * pf2eSpaceMultiplier(monsterSize(block)));
+    const tokenSize = Math.round(footprintSize * 0.72);
+    const labelWidth = Math.max(tokenSize * 0.62, tokenSize - gridDpi * 0.3);
+    const labelHeight = Math.max(tokenSize * 0.4, tokenSize * 0.5);
 
     for (let copy = 0; copy < group.count; copy += 1) {
       const label = numberedLabel(labelBase, copy);
@@ -324,16 +333,20 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin, importedIte
       }
 
       const position = gridPosition(items.length, {
-        startX: origin.x + tokenSize / 2,
-        startY: origin.y + tokenSize / 2,
+        startX: origin.x + footprintSize / 2,
+        startY: origin.y + footprintSize / 2,
         columns: 8,
-        gapX: Math.max(baseGap, tokenSize + gridDpi * 0.25),
-        gapY: Math.max(baseGap, tokenSize + gridDpi * 0.25),
+        gapX: Math.max(baseGap, footprintSize + gridDpi * 0.25),
+        gapY: Math.max(baseGap, footprintSize + gridDpi * 0.25),
       });
-      const labelPosition = {
-        x: position.x + (tokenSize - labelWidth) / 2,
-        y: position.y + (tokenSize - labelHeight) / 2,
+      const tokenCenter = {
+        x: position.x + tokenSize / 2,
+        y: position.y + tokenSize / 2,
       };
+      const baseTextWidth = labelWidth * 0.82;
+      const baseTextHeight = labelHeight;
+      const numberTextWidth = labelWidth * 0.36;
+      const numberTextHeight = labelHeight * 0.55;
       const tokenId = `amba-token-${safeName(tokenInstanceId, "monster")}-${crypto.randomUUID()}`;
       const baseTextId = `${tokenId}-label-base`;
       const numberTextId = `${tokenId}-label-number`;
@@ -386,9 +399,10 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin, importedIte
           .textAlign("CENTER")
           .textAlignVertical("MIDDLE")
           .layer("CHARACTER")
-          .position(labelPosition)
+          .position(centeredBoxPosition(tokenCenter, baseTextWidth, baseTextHeight, { x: -tokenSize * 0.04, y: tokenSize * 0.04 }))
           .zIndex(10)
           .attachedTo(tokenId)
+          .disableHit(true)
           .disableAutoZIndex(true)
           .metadata({
             ...metadata,
@@ -402,8 +416,8 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin, importedIte
           .name(`${label} ${name} Label Number`)
           .description(`AMBA monster token number label for ${name}`)
           .richText(tokenLabelText(String(copy + 1)))
-          .width(labelWidth * 0.36)
-          .height(labelHeight * 0.55)
+          .width(numberTextWidth)
+          .height(numberTextHeight)
           .padding(0)
           .fontSize(tokenSubscriptFontSize(tokenSize))
           .fontWeight(700)
@@ -414,12 +428,10 @@ async function buildMonsterTokenItems({ moduleId, encounter, origin, importedIte
           .textAlign("CENTER")
           .textAlignVertical("MIDDLE")
           .layer("CHARACTER")
-          .position({
-            x: labelPosition.x + labelWidth * 0.62,
-            y: labelPosition.y + labelHeight * 0.5,
-          })
+          .position(centeredBoxPosition(tokenCenter, numberTextWidth, numberTextHeight, { x: tokenSize * 0.18, y: tokenSize * 0.18 }))
           .zIndex(11)
           .attachedTo(tokenId)
+          .disableHit(true)
           .disableAutoZIndex(true)
           .metadata({
             ...metadata,
@@ -481,6 +493,7 @@ function buildMonsterStatCardItems({ moduleId, encounter, origin, importedItems 
         .strokeWidth(6)
         .layer("NOTE")
         .position(position)
+        .locked(true)
         .zIndex(0)
         .disableAutoZIndex(true)
         .metadata({ ...metadata, [`${NS}/groupId`]: cardId, [`${NS}/groupRole`]: "background" })
@@ -500,6 +513,8 @@ function buildMonsterStatCardItems({ moduleId, encounter, origin, importedItems 
         .textAlignVertical("TOP")
         .layer("NOTE")
         .position(position)
+        .locked(true)
+        .disableHit(true)
         .zIndex(10)
         .attachedTo(cardId)
         .disableAutoZIndex(true)
