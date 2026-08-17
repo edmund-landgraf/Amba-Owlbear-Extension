@@ -128,12 +128,23 @@ async function lookupLocalMonsterImage(name, aonId = null) {
 }
 
 async function withLocalMonsterArt(result, fallbackName = "") {
-  if (!result) return result;
-  const imageUrl = await lookupLocalMonsterImage(result.name || fallbackName, aonIdFromLookupResult(result));
-  return imageUrl ? { ...result, imageUrl } : result;
+  const lookupName = result?.name || fallbackName;
+  if (!lookupName) return result;
+
+  const imageUrl = await lookupLocalMonsterImage(
+    lookupName,
+    aonIdFromLookupResult(result)
+  );
+
+  if (!imageUrl) return result;
+
+  return {
+    ...(result ?? { name: fallbackName }),
+    imageUrl,
+  };
 }
 
-async function lookupPf2eCreatureByPath(path, variant = null) {
+async function lookupPf2eCreatureByPath(path, variant = null, fallbackName = "") {
   const id = aonCreatureIdFromPath(path);
   const should = [{ match_phrase: { url: path } }];
   if (Number.isFinite(id)) {
@@ -148,7 +159,7 @@ async function lookupPf2eCreatureByPath(path, variant = null) {
     },
   });
   const result = creatureFromAonHit(pickAonCreatureByPath(hits, path), variant);
-  return withLocalMonsterArt(result);
+  return withLocalMonsterArt(result, fallbackName);
 }
 
 async function lookupPf2eCreature(query, variant = null) {
@@ -178,7 +189,7 @@ export async function lookupCreatureName({ query, aonPath = null, ruleset = "pf2
   const helper = helpers[ruleset];
   let result = null;
   if (path) {
-    result = await lookupPf2eCreatureByPath(path, variant);
+    result = await lookupPf2eCreatureByPath(path, variant, normalizedQuery);
   } else if (helper) {
     result = await helper(normalizedQuery, variant);
   }
