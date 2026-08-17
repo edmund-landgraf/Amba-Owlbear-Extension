@@ -360,7 +360,7 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems
   }
 
   const saved = savedMapPlacement(encounter);
-  const mapImage = { ...info.image, url };
+  const mapImage = { ...info.image };
   const stagedPosition = imagePositionRightOfBounds(occupiedBounds, info, 1000);
   const position = saved?.position
     ? saved.position
