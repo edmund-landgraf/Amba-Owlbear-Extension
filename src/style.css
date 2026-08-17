@@ -87,6 +87,7 @@ select option {
   font-size: 13px;
   line-height: 1.35;
   margin-top: 8px;
+  white-space: pre-line;
 }
 
 .encounter-analysis {

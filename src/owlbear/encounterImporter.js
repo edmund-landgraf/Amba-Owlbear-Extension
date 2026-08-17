@@ -1,8 +1,8 @@
 import OBR, { buildImage } from "@owlbear-rodeo/sdk";
-import { imageInfoFromUrl, safeName } from "./imageUtils.js";
+import { fetchImageBlob, imageInfoFromUrl, safeName } from "./imageUtils.js";
 import { publishTokenPng } from "./tokenHost.js";
-import { rasterizedMonsterTokenFile } from "./tokenImage.js";
-import { rasterizeStatCardPng } from "./statCardImage.js";
+import { rasterizedMonsterArtTokenFile, rasterizedMonsterTokenFile } from "./tokenImage.js";
+import { renderStatCardSvgFile } from "./statCardImage.js";
 import { inferMapGrid } from "./mapGridInference.js";
 import { addItemsToCurrentScene, deleteItemsFromCurrentScene, moveItemsInCurrentScene, unlockAmbaStatCardsInCurrentScene, unlockItemsInCurrentScene } from "./sceneItems.js";
 import { requireOpenScene } from "./sceneService.js";
@@ -16,6 +16,8 @@ import {
   savedMapPlacement,
   monsterBlocks,
   monsterCount,
+  monsterArtUrl,
+  monsterTokenArtUrl,
   monsterId,
   monsterIdentity,
   monsterName,
@@ -243,12 +245,21 @@ function monsterTypeGroups(encounter) {
 const STAT_CARD_WIDTH = 1040;
 const STAT_CARD_HEIGHT = 760;
 
-async function monsterTokenImage(label, name, color, cells) {
-  const png = await rasterizedMonsterTokenFile({ label, name, color });
+async function monsterTokenImage(label, name, color, cells, artUrl) {
+  let png = null;
+  let artToken = false;
+  if (artUrl) {
+    png = await rasterizedMonsterArtTokenFile({ artUrl, name: safeName(name, "monster") }).catch(() => null);
+    artToken = Boolean(png);
+  }
+  if (!png) {
+    png = await rasterizedMonsterTokenFile({ label, name, color });
+  }
   const url = await publishTokenPng(png);
   return {
     image: { width: 512, height: 512, url, mime: "image/png" },
     grid: { dpi: Math.round(512 / Math.max(cells, 0.5)), offset: { x: 256, y: 256 } },
+    artToken,
   };
 }
 
@@ -376,8 +387,9 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems
   return { item, bounds: boundsFromImageInfo(info, position), warnings };
 }
 
-async function resolveMonsterGroups(encounter) {
+async function resolveMonsterGroups(encounter, onStatus = () => {}) {
   const groups = monsterTypeGroups(encounter);
+  onStatus(`Resolving ${groups.length} monster type${groups.length === 1 ? "" : "s"}...`);
   await Promise.all(
     groups.map(async (group) => {
       const identity = monsterIdentity(group.block);
@@ -394,6 +406,10 @@ async function resolveMonsterGroups(encounter) {
       if (looked?.source) group.block.source = looked.source;
       if (looked?.size) group.block.size = looked.size;
       if (looked?.sourceUrl) group.block.sourceUrl = looked.sourceUrl;
+      if (looked?.imageUrl) {
+        group.block.resolvedImageUrl = looked.imageUrl;
+        onStatus(`Found monster art candidate for ${displayName}.`);
+      }
       group.displayName = displayName;
       group.variant = identity.variant ?? "normal";
       group.block.resolvedVariant = group.variant;
@@ -402,6 +418,24 @@ async function resolveMonsterGroups(encounter) {
   return groups;
 }
 
+
+async function monsterArtFile(artUrl, name, onStatus = () => {}) {
+  if (!artUrl) {
+    onStatus(`No monster art candidate for ${name}.`);
+    return null;
+  }
+  try {
+    onStatus(`Fetching monster art for ${name}...`);
+    const file = /\.svg($|\?)/i.test(String(artUrl))
+      ? await rasterizedMonsterArtTokenFile({ artUrl, name: safeName(name, "monster") })
+      : await fetchImageBlob(artUrl, `${safeName(name, "monster")}-art`);
+    onStatus(`Monster art loaded for ${name}.`);
+    return file;
+  } catch (error) {
+    onStatus(`Monster art failed for ${name}: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
 
 async function pushStatCardItem({
   items,
@@ -416,18 +450,21 @@ async function pushStatCardItem({
   gridDpi,
   tokenLabel,
   tokenColor,
+  artUrl,
+  onStatus = () => {},
 }) {
   const content = statCardContent(block, { name, count, variant });
   const tokenFile = tokenLabel
     ? await rasterizedMonsterTokenFile({ label: tokenLabel, name, color: tokenColor })
     : null;
-  const file = await rasterizeStatCardPng({ ...content, tokenFile });
+  const artFile = await monsterArtFile(artUrl, name, onStatus);
+  onStatus(`Rendering ${name} stat card SVG...`);
+  const file = await renderStatCardSvgFile({ ...content, tokenFile, artFile });
   const url = await publishTokenPng(file);
-  const dpi = gridDpi * 2;
   items.push(
     buildImage(
-      { width: STAT_CARD_WIDTH * 2, height: STAT_CARD_HEIGHT * 2, url, mime: "image/png" },
-      { dpi, offset: { x: STAT_CARD_WIDTH, y: STAT_CARD_HEIGHT } }
+      { width: STAT_CARD_WIDTH, height: STAT_CARD_HEIGHT, url, mime: "image/svg+xml" },
+      { dpi: gridDpi, offset: { x: STAT_CARD_WIDTH / 2, y: STAT_CARD_HEIGHT / 2 } }
     )
       .name(`${name} Stat Card`)
       .description(`AMBA monster stat block for ${name}`)
@@ -455,6 +492,9 @@ async function buildMonsterStagingItems({
   importedItems,
   importTokens,
   importStatCards,
+  includeMonsterArt,
+  makeTokenArt,
+  onStatus = () => {},
 }) {
   const items = [];
   const itemBatches = [];
@@ -463,7 +503,7 @@ async function buildMonsterStagingItems({
   let tokenSkipped = 0;
   let tokenImported = 0;
   let cardsImported = 0;
-  const groups = await resolveMonsterGroups(encounter);
+  const groups = await resolveMonsterGroups(encounter, onStatus);
   const labelBases = labelBaseForBlocks(groups, (group) => group.displayName);
   const gridDpi = Math.min(Math.max(await sceneGridDpi(), 80), 180);
   const tokenGap = gridDpi * 0.25;
@@ -474,6 +514,8 @@ async function buildMonsterStagingItems({
     const block = group.block;
     const color = TOKEN_COLORS[groupIndex % TOKEN_COLORS.length];
     const name = group.displayName;
+    const cardArtUrl = monsterArtUrl(block);
+    const tokenArtUrl = monsterTokenArtUrl(block);
     const labelBase = labelBases[groupIndex];
     const cells = pf2eSpaceMultiplier(monsterSize(block));
     const tokenSpan = Math.round(gridDpi * cells);
@@ -507,19 +549,23 @@ async function buildMonsterStagingItems({
           monsterId: monsterId(block) ?? "",
           tokenInstanceId,
         });
-        const tokenImage = await monsterTokenImage(label, name, color, cells);
-        groupItems.push(
-          buildImage(tokenImage.image, tokenImage.grid)
-            .name(`${label} ${name}`)
-            .description(`AMBA monster token for ${name}`)
-            .plainText("")
-            .textFillOpacity(0)
-            .textStrokeOpacity(0)
-            .layer("CHARACTER")
-            .position(position)
-            .metadata(metadata)
-            .build()
-        );
+        if (makeTokenArt && tokenArtUrl) onStatus(`Rendering token art for ${label} ${name}...`);
+        if (makeTokenArt && !tokenArtUrl) onStatus(`No token art candidate for ${label} ${name}; using label token.`);
+        const tokenImage = await monsterTokenImage(label, name, color, cells, makeTokenArt ? tokenArtUrl : null);
+        if (makeTokenArt && tokenImage.artToken) onStatus(`Token art rendered for ${label} ${name}.`);
+        if (makeTokenArt && tokenArtUrl && !tokenImage.artToken) onStatus(`Token art failed for ${label} ${name}; using label token.`);
+        const useArtToken = tokenImage.artToken;
+        const builder = buildImage(tokenImage.image, tokenImage.grid)
+          .name(`${label} ${name}`)
+          .description(`AMBA monster token for ${name}`)
+          .plainText(useArtToken ? label : "")
+          .layer("CHARACTER")
+          .position(position)
+          .metadata(metadata);
+        if (!useArtToken) {
+          builder.textFillOpacity(0).textStrokeOpacity(0);
+        }
+        groupItems.push(builder.build());
         tokenImported += 1;
       }
     }
@@ -542,6 +588,8 @@ async function buildMonsterStagingItems({
         gridDpi,
         tokenLabel: labelBase,
         tokenColor: color,
+        artUrl: includeMonsterArt ? cardArtUrl : null,
+        onStatus,
       });
       cardsImported += 1;
     }
@@ -561,20 +609,25 @@ async function buildMonsterStagingItems({
   return { items, itemBatches, idsToReplace, tokenMoves, tokenSkipped, tokenImported, cardsImported };
 }
 
-export async function addEncounterToCurrentScene({ moduleId, encounter, options = {} }) {
+export async function addEncounterToCurrentScene({ moduleId, encounter, options = {}, onStatus = () => {} }) {
+  onStatus("Checking Owlbear scene...");
   await requireOpenScene();
   const importOptions = {
     importMap: true,
     importMonsterTokens: true,
     importStatCards: true,
+    includeMonsterArt: false,
+    makeTokenArt: false,
     ...options,
   };
   const items = [];
   const id = encounterId(encounter);
+  onStatus("Reading existing AMBA scene items...");
   const importedItems = await getImportedEncounterItems(moduleId, id);
   await unlockAmbaStatCardsInCurrentScene();
   const mapLayerBounds = await getSceneBoundsForLayers(["MAP"]);
   if (importOptions.importMap) {
+    onStatus("Preparing encounter map...");
     await applySceneGridFromAmba(encounterMapGrid(encounter));
   }
   const map = importOptions.importMap
@@ -597,6 +650,9 @@ export async function addEncounterToCurrentScene({ moduleId, encounter, options 
           importedItems,
           importTokens: importOptions.importMonsterTokens,
           importStatCards: importOptions.importStatCards,
+          includeMonsterArt: importOptions.includeMonsterArt,
+          makeTokenArt: importOptions.makeTokenArt,
+          onStatus,
         })
       : { items: [], itemBatches: [], idsToReplace: [], tokenMoves: [], tokenSkipped: 0, tokenImported: 0, cardsImported: 0 };
   items.push(...monsterResult.items);
@@ -605,12 +661,20 @@ export async function addEncounterToCurrentScene({ moduleId, encounter, options 
     throw new Error("This encounter did not include a map or monster tokens AMBA can export yet.");
   }
 
+  onStatus("Replacing old stat cards and moving preserved tokens...");
   await deleteItemsFromCurrentScene(monsterResult.idsToReplace);
   await moveItemsInCurrentScene(monsterResult.tokenMoves);
-  if (map?.item) await addItemsToCurrentScene([map.item]);
-  for (const batch of monsterResult.itemBatches ?? []) {
-    if (batch.length) await addItemsToCurrentScene(batch);
+  if (map?.item) {
+    onStatus("Adding map to scene...");
+    await addItemsToCurrentScene([map.item]);
   }
+  for (const batch of monsterResult.itemBatches ?? []) {
+    if (batch.length) {
+      onStatus(`Adding ${batch.length} monster item${batch.length === 1 ? "" : "s"} to scene...`);
+      await addItemsToCurrentScene(batch);
+    }
+  }
+  onStatus("Saving scene metadata...");
   await saveEncounterSceneMetadata({ moduleId, encounterId: id, title: encounterTitle(encounter) });
   return {
     mapImported: Boolean(map?.item) || Boolean(map?.updated),

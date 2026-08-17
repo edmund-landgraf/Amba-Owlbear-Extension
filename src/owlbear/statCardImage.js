@@ -1,11 +1,25 @@
-function wrapLine(context, text, maxWidth) {
+import { dataUrlFromFile } from "./imageUtils.js";
+
+function escapeXml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function estimateTextWidth(text, fontSize, bold = false) {
+  return String(text ?? "").length * fontSize * (bold ? 0.66 : 0.61);
+}
+
+function wrapLine(text, maxWidth, fontSize, bold = false) {
   const words = String(text ?? "").split(/\s+/).filter(Boolean);
   if (!words.length) return [""];
   const lines = [];
   let current = words[0];
   for (const word of words.slice(1)) {
     const next = `${current} ${word}`;
-    if (context.measureText(next).width <= maxWidth) {
+    if (estimateTextWidth(next, fontSize, bold) <= maxWidth) {
       current = next;
     } else {
       lines.push(current);
@@ -16,102 +30,91 @@ function wrapLine(context, text, maxWidth) {
   return lines;
 }
 
-async function loadBitmap(file) {
+function textNode({ x, y, text, size = 17, weight = "400", fill = "#251f1a", family = "Consolas, ui-monospace, monospace" }) {
+  return `<text x="${x}" y="${y}" font-family="${escapeXml(family)}" font-size="${size}" font-weight="${weight}" fill="${fill}">${escapeXml(text)}</text>`;
+}
+
+async function embeddedImage(file) {
   if (!file) return null;
   try {
-    return await createImageBitmap(file);
+    return await dataUrlFromFile(file);
   } catch {
     return null;
   }
 }
 
-function canvasFile(canvas, filename) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("Unable to render stat card"));
-        return;
-      }
-      resolve(new File([blob], filename, { type: "image/png" }));
-    }, "image/png");
-  });
+function imageNode({ href, x, y, width, height }) {
+  if (!href) return "";
+  return `<image href="${escapeXml(href)}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`;
 }
 
-export async function rasterizeStatCardPng({
+export async function renderStatCardSvgFile({
   header,
   name,
   meta,
   rows,
   tokenFile,
+  artFile,
   width = 1040,
   height = 760,
 }) {
-  const scale = 2;
-  const canvas = document.createElement("canvas");
-  canvas.width = width * scale;
-  canvas.height = height * scale;
-  const context = canvas.getContext("2d");
-  context.scale(scale, scale);
-  context.fillStyle = "#f7f2e8";
-  context.fillRect(0, 0, width, height);
-  context.strokeStyle = "#4a4036";
-  context.lineWidth = 6;
-  context.strokeRect(3, 3, width - 6, height - 6);
-
   const left = 40;
   const maxWidth = width - 80;
-  let y = 28;
-  context.fillStyle = "#251f1a";
-  context.textBaseline = "top";
+  const tokenData = await embeddedImage(tokenFile);
+  const artData = await embeddedImage(artFile);
+  const artBounds = artData ? { x: width - 320, y: 28, width: 280, height: 210 } : null;
+  const textMaxWidth = artBounds ? artBounds.x - left - 24 : maxWidth;
+  const parts = [];
+  let y = tokenData ? 120 : 48;
 
-  const tokenBitmap = await loadBitmap(tokenFile);
-  if (tokenBitmap) {
-    const tokenSize = 80;
-    context.drawImage(tokenBitmap, left, y, tokenSize, tokenSize);
-    tokenBitmap.close();
-    y += tokenSize + 12;
-  } else {
-    y = 48;
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`);
+  parts.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="#f7f2e8"/>`);
+  parts.push(`<rect x="3" y="3" width="${width - 6}" height="${height - 6}" fill="none" stroke="#4a4036" stroke-width="6"/>`);
+
+  if (artData) {
+    parts.push(`<rect x="${artBounds.x}" y="${artBounds.y}" width="${artBounds.width}" height="${artBounds.height}" fill="#fffaf0" stroke="#4a4036" stroke-width="2"/>`);
+    parts.push(imageNode({ href: artData, x: artBounds.x + 8, y: artBounds.y + 8, width: artBounds.width - 16, height: artBounds.height - 16 }));
   }
 
-  context.font = "bold 22px Consolas, ui-monospace, monospace";
-  context.fillText(header, left, y);
-  y += 32;
+  if (tokenData) {
+    parts.push(imageNode({ href: tokenData, x: left - 16, y: 18, width: 80, height: 80 }));
+  }
 
-  context.font = "bold 28px Consolas, ui-monospace, monospace";
-  for (const line of wrapLine(context, name, maxWidth)) {
-    context.fillText(line, left, y);
-    y += 34;
+  parts.push(textNode({ x: left, y, text: header, size: 22, weight: "700" }));
+  y += 34;
+
+  for (const line of wrapLine(name, textMaxWidth, 28, true)) {
+    parts.push(textNode({ x: left, y, text: line, size: 28, weight: "700" }));
+    y += 36;
   }
 
   if (meta) {
-    context.font = "16px Consolas, ui-monospace, monospace";
-    for (const line of wrapLine(context, meta, maxWidth)) {
-      context.fillText(line, left, y);
-      y += 22;
+    for (const line of wrapLine(meta, textMaxWidth, 16)) {
+      parts.push(textNode({ x: left, y, text: line, size: 16 }));
+      y += 23;
     }
     y += 8;
   }
 
-  context.font = "17px Consolas, ui-monospace, monospace";
   const lineHeight = 22;
+  const labelSize = 17;
+  const labelWidth = estimateTextWidth("Perception  ", labelSize, true);
   for (const { label, value } of rows) {
+    if (y > height - 36) break;
     const labelText = `${String(label).padEnd(11, " ")} `;
-    const labelWidth = context.measureText(labelText).width;
-    const wrapped = wrapLine(context, value, maxWidth - labelWidth);
-    wrapped.forEach((line, index) => {
-      if (y > height - 36) return;
+    const wrapped = wrapLine(value, maxWidth - labelWidth, labelSize);
+    for (let index = 0; index < wrapped.length; index += 1) {
+      if (y > height - 36) break;
       if (index === 0) {
-        context.font = "bold 17px Consolas, ui-monospace, monospace";
-        context.fillText(labelText, left, y);
-        context.font = "17px Consolas, ui-monospace, monospace";
-        context.fillText(line, left + labelWidth, y);
-      } else {
-        context.fillText(line, left + labelWidth, y);
+        parts.push(textNode({ x: left, y, text: labelText, size: labelSize, weight: "700" }));
       }
+      parts.push(textNode({ x: left + labelWidth, y, text: wrapped[index], size: labelSize }));
       y += lineHeight;
-    });
+    }
   }
 
-  return canvasFile(canvas, "stat-card.png");
+  parts.push("</svg>");
+  return new File([parts.join("\n")], "stat-card.svg", { type: "image/svg+xml" });
 }
+
+export const rasterizeStatCardPng = renderStatCardSvgFile;

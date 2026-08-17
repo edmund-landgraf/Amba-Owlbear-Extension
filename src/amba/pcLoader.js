@@ -22,6 +22,8 @@ export async function wirePcLoader() {
   const optionImportMap = document.getElementById("optionImportMap");
   const optionImportMonsterTokens = document.getElementById("optionImportMonsterTokens");
   const optionImportStatCards = document.getElementById("optionImportStatCards");
+  const optionIncludeMonsterArt = document.getElementById("optionIncludeMonsterArt");
+  const optionMakeTokenArt = document.getElementById("optionMakeTokenArt");
   const optionIncludePcTokens = document.getElementById("optionIncludePcTokens");
   const pcList = document.getElementById("pcList");
   const importStatus = document.getElementById("importStatus");
@@ -41,6 +43,8 @@ export async function wirePcLoader() {
     optionImportMap,
     optionImportMonsterTokens,
     optionImportStatCards,
+    optionIncludeMonsterArt,
+    optionMakeTokenArt,
     optionIncludePcTokens,
     encounterStatus,
     encounterDiagnostics,

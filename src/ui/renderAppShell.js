@@ -45,6 +45,8 @@ export function renderAppShell() {
           <label><input id="optionImportMap" type="checkbox" checked /> Push map</label>
           <label><input id="optionImportMonsterTokens" type="checkbox" checked /> Push monster tokens</label>
           <label><input id="optionImportStatCards" type="checkbox" checked /> Push monster stat cards</label>
+          <label><input id="optionIncludeMonsterArt" type="checkbox" /> Include monster art</label>
+          <label><input id="optionMakeTokenArt" type="checkbox" disabled /> Make token art</label>
           <label><input id="optionIncludePcTokens" type="checkbox" /> Push PC tokens</label>
         </fieldset>
         <button id="importEncounter" disabled>Import encounter</button>

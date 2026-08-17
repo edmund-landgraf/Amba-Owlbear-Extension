@@ -8,6 +8,36 @@ export async function rasterizedMonsterTokenFile({ label, name, color }) {
   return rasterizeSvgFile(svgFile, `${label || "monster"}-token.png`, 512, 512);
 }
 
+export async function rasterizedMonsterArtTokenFile({ artUrl, name }) {
+  let file = await fetchImageBlob(artUrl, `${name || "monster"}-art`);
+  if (/svg/i.test(file.type) || /\.svg($|\?)/i.test(String(artUrl))) {
+    file = await rasterizeSvgFile(file, `${name || "monster"}-art.png`, 512, 512);
+  }
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const context = canvas.getContext("2d");
+    const scale = Math.min(512 / bitmap.width, 512 / bitmap.height);
+    const drawWidth = bitmap.width * scale;
+    const drawHeight = bitmap.height * scale;
+    context.drawImage(bitmap, (512 - drawWidth) / 2, (512 - drawHeight) / 2, drawWidth, drawHeight);
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error(`Unable to render ${name || "monster"} art token`));
+          return;
+        }
+        resolve(new File([blob], `${name || "monster"}-art-token.png`, { type: "image/png" }));
+      }, "image/png");
+    });
+  } finally {
+    bitmap.close();
+  }
+}
+
 function fileFromDataUrl(url, filename) {
   const match = String(url).match(/^data:([^;,]+)?(?:;charset=[^;,]+)?;(?:base64,)?/i);
   if (!match) return null;

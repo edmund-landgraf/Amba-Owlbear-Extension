@@ -53,21 +53,27 @@ export default defineConfig({
             req.on("data", (chunk) => chunks.push(chunk));
             req.on("end", () => {
               const id = randomUUID();
-              writeFileSync(join(tokenDir, `${id}.png`), Buffer.concat(chunks));
+              const contentType = String(req.headers["content-type"] ?? "image/png").toLowerCase();
+              const extension = contentType.includes("svg") ? "svg" : "png";
+              writeFileSync(join(tokenDir, `${id}.${extension}`), Buffer.concat(chunks));
               res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ id, url: `/amba-generated-tokens/${id}.png` }));
+              res.end(JSON.stringify({ id, url: `/amba-generated-tokens/${id}.${extension}` }));
             });
             return;
           }
 
           if (req.method === "GET" || req.method === "HEAD") {
-            const id = String(req.url ?? "")
-              .replace(/^\//, "")
-              .replace(/\.png(?:\?.*)?$/, "");
-            const path = join(tokenDir, `${id}.png`);
+            const match = String(req.url ?? "").match(/^\/([a-f0-9-]+)\.(png|svg)(?:\?.*)?$/i);
+            if (!match) {
+              res.statusCode = 404;
+              res.end();
+              return;
+            }
+            const [, id, extension] = match;
+            const path = join(tokenDir, `${id}.${extension.toLowerCase()}`);
             try {
               const file = readFileSync(path);
-              res.setHeader("Content-Type", "image/png");
+              res.setHeader("Content-Type", extension.toLowerCase() === "svg" ? "image/svg+xml" : "image/png");
               res.setHeader("Cache-Control", "no-store");
               res.statusCode = 200;
               if (req.method === "HEAD") {

@@ -99,6 +99,8 @@ The extension currently exposes these import controls:
 - Push map
 - Push monster tokens
 - Push monster stat cards
+- Include monster art on stat cards
+- Make token art from monster art, with the token label rendered as Owlbear token text
 - Push PC tokens
 
 After import, **Save map and token placements to AMBA** writes current map and monster-token positions back to AMBA.

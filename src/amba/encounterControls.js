@@ -15,6 +15,8 @@ export function wireEncounterControls({
   optionImportMap,
   optionImportMonsterTokens,
   optionImportStatCards,
+  optionIncludeMonsterArt,
+  optionMakeTokenArt,
   optionIncludePcTokens,
   encounterStatus,
   encounterDiagnostics,
@@ -89,6 +91,8 @@ export function wireEncounterControls({
       importMap: optionImportMap?.checked ?? true,
       importMonsterTokens: optionImportMonsterTokens?.checked ?? true,
       importStatCards: optionImportStatCards?.checked ?? true,
+      includeMonsterArt: optionIncludeMonsterArt?.checked ?? false,
+      makeTokenArt: false,
       includePcTokens: optionIncludePcTokens?.checked ?? false,
     };
   }
@@ -247,7 +251,14 @@ export function wireEncounterControls({
       if (!encounter) throw new Error("Select an encounter to import.");
 
       const options = exportOptions();
-      const result = await addEncounterToCurrentScene({ moduleId, encounter, options });
+      const importLog = [];
+      const onStatus = (message) => {
+        if (!message) return;
+        importLog.push(message);
+        encounterStatus.textContent = message;
+        if (encounterDiagnostics) encounterDiagnostics.textContent = importLog.slice(-12).join("\n");
+      };
+      const result = await addEncounterToCurrentScene({ moduleId, encounter, options, onStatus });
       let pcCount = 0;
       if (options.includePcTokens) {
         const pcs = await getPcs(moduleId);
@@ -258,7 +269,8 @@ export function wireEncounterControls({
         encounterStatus.textContent += ` Added ${pcCount} PC token${pcCount === 1 ? "" : "s"}.`;
       }
       if (encounterDiagnostics) {
-        encounterDiagnostics.textContent = `Scene metadata updated for AMBA encounter ${encounter.id ?? encounter.encounterId ?? encounterPicker.value}. Re-import preserves existing AMBA token positions.`;
+        importLog.push(`Scene metadata updated for AMBA encounter ${encounter.id ?? encounter.encounterId ?? encounterPicker.value}. Re-import preserves existing AMBA token positions.`);
+        encounterDiagnostics.textContent = importLog.slice(-12).join("\n");
       }
     } catch (error) {
       encounterStatus.textContent = errorMessage(error, "Unable to import encounter.");
@@ -309,7 +321,14 @@ export function wireEncounterControls({
     void analyzeSelectedEncounter();
   });
 
-  for (const option of [optionImportMap, optionImportMonsterTokens, optionImportStatCards, optionIncludePcTokens]) {
+  for (const option of [
+    optionImportMap,
+    optionImportMonsterTokens,
+    optionImportStatCards,
+    optionIncludeMonsterArt,
+    optionMakeTokenArt,
+    optionIncludePcTokens,
+  ]) {
     option?.addEventListener("change", () => {
       if (loadedEncounter) {
         void analyzeSelectedEncounter();

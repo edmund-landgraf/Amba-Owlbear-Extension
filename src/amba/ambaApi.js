@@ -88,6 +88,12 @@ function monsterBlockFromArtifact(artifact) {
     level: payload.level,
     source: payload.source,
     statBlock: payload.content ?? payload.statBlock,
+    payload,
+    metadata: payload.metadata,
+    artifacts: artifact.artifacts,
+    artUrl: payload.artUrl ?? payload.artworkUrl ?? payload.portraitUrl ?? payload.imageUrl,
+    imageUrl: payload.imageUrl,
+    portraitUrl: payload.portraitUrl,
   };
 }
 

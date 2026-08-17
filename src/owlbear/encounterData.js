@@ -198,6 +198,119 @@ export function monsterStatBlock(block) {
   );
 }
 
+function keyPathIncludes(path, pattern) {
+  return path.some((key) => pattern.test(key));
+}
+
+function looksLikeImageUrl(url) {
+  return /\.(avif|gif|jpe?g|png|svg|webp)(\?|#|$)|\/image|\/images|\/uploads|\/assets/i.test(String(url ?? ""));
+}
+
+function collectUrlByKey(value, acceptsPath, path = [], seen = new Set()) {
+  if (!value) return null;
+  if (typeof value === "string") {
+    return acceptsPath(path, value) ? asAbsoluteUrl(value) : null;
+  }
+  if (typeof value !== "object" || seen.has(value)) return null;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = collectUrlByKey(entry, acceptsPath, path, seen);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const role = String(value.role ?? value.type ?? value.kind ?? value.name ?? value.label ?? "").toLocaleLowerCase();
+  for (const [key, entry] of Object.entries(value)) {
+    const nextPath = [...path, key.toLocaleLowerCase()];
+    const found = collectUrlByKey(entry, (candidatePath, url) => acceptsPath(candidatePath, url, role), nextPath, seen);
+    if (found) return found;
+  }
+  return null;
+}
+
+function isMonsterArtPath(path, url, role = "") {
+  if (keyPathIncludes(path, /token|map|sheet|note|source|aon|stat/i)) return false;
+  if (/token|map|sheet|note|source|aon|stat/.test(role)) return false;
+  return (
+    keyPathIncludes(path, /monsterart|artwork|portrait|image|thumbnail|hero|picture|asset|url/i) ||
+    /art|portrait|monster|creature|npc|image|thumbnail/.test(role)
+  ) && looksLikeImageUrl(url);
+}
+
+function isTokenArtPath(path, url, role = "") {
+  if (keyPathIncludes(path, /map|sheet|note|source|aon|stat/i)) return false;
+  if (/map|sheet|note|source|aon|stat/.test(role)) return false;
+  return (
+    keyPathIncludes(path, /tokenart|tokensvg|tokenimage|tokenurl|token/i) ||
+    /token/.test(role)
+  ) && looksLikeImageUrl(url);
+}
+
+export function monsterArtUrl(block) {
+  return firstUrl(
+    block.resolvedImageUrl,
+    block.ImageUrl,
+    block.imageUrl,
+    block.monsterArtUrl,
+    block.artUrl,
+    block.artworkUrl,
+    block.portraitUrl,
+    block.payload?.resolvedImageUrl,
+    block.payload?.ImageUrl,
+    block.payload?.imageUrl,
+    block.payload?.monsterArtUrl,
+    block.payload?.artUrl,
+    block.payload?.artworkUrl,
+    block.payload?.portraitUrl,
+    block.npc?.resolvedImageUrl,
+    block.npc?.ImageUrl,
+    block.npc?.imageUrl,
+    block.npc?.monsterArtUrl,
+    block.npc?.artUrl,
+    block.npc?.artworkUrl,
+    block.npc?.portraitUrl,
+    block.monster?.resolvedImageUrl,
+    block.monster?.ImageUrl,
+    block.monster?.imageUrl,
+    block.monster?.monsterArtUrl,
+    block.monster?.artUrl,
+    block.monster?.artworkUrl,
+    block.monster?.portraitUrl
+  );
+}
+
+export function monsterTokenArtUrl(block) {
+  return firstUrl(
+    block.TokenArtUrl,
+    block.TokenUrl,
+    block.TokenSvgUrl,
+    block.tokenArtUrl,
+    block.tokenUrl,
+    block.tokenSvgUrl,
+    block.payload?.TokenArtUrl,
+    block.payload?.TokenUrl,
+    block.payload?.TokenSvgUrl,
+    block.payload?.tokenArtUrl,
+    block.payload?.tokenUrl,
+    block.payload?.tokenSvgUrl,
+    block.npc?.TokenArtUrl,
+    block.npc?.TokenUrl,
+    block.npc?.TokenSvgUrl,
+    block.npc?.tokenArtUrl,
+    block.npc?.tokenUrl,
+    block.npc?.tokenSvgUrl,
+    block.monster?.TokenArtUrl,
+    block.monster?.TokenUrl,
+    block.monster?.TokenSvgUrl,
+    block.monster?.tokenArtUrl,
+    block.monster?.tokenUrl,
+    block.monster?.tokenSvgUrl
+  );
+}
+
 function appendTokenOptions(url, options) {
   if (!options?.label && !options?.fontSize) return url;
 

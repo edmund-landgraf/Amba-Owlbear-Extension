@@ -1,6 +1,7 @@
 import { aonCreatureIdFromPath, creatureFromAonHit, pickAonCreatureHit } from "./aonStatBlock.js";
 
 const AON_SEARCH_URL = "https://elasticsearch.aonprd.com/aon/_search";
+const LOCAL_PF2_API_BASE_URL = (import.meta.env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
 const LOOKUP_TIMEOUT_MS = 3000;
 const AON_SOURCE_FIELDS = [
   "name",
@@ -44,35 +45,92 @@ export function encounterRuleset(encounter, block) {
   return value;
 }
 
-async function searchAonCreatures(esQuery) {
+async function fetchJsonWithTimeout(url, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
 
   try {
-    const response = await fetch(AON_SEARCH_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        size: 8,
-        query: esQuery,
-        _source: AON_SOURCE_FIELDS,
-      }),
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data?.hits?.hits ?? [];
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) return null;
+    return await response.json();
   } catch {
-    return [];
+    return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function searchAonCreatures(esQuery) {
+  const data = await fetchJsonWithTimeout(AON_SEARCH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      size: 8,
+      query: esQuery,
+      _source: AON_SOURCE_FIELDS,
+    }),
+  });
+  return data?.hits?.hits ?? [];
 }
 
 function pickAonCreatureByPath(hits, path) {
   const needle = String(path ?? "").toLocaleLowerCase();
   const exact = (hits ?? []).find((hit) => String(hit?._source?.url ?? "").toLocaleLowerCase() === needle);
   return exact ?? hits?.[0] ?? null;
+}
+
+function aonIdFromLookupResult(result) {
+  return aonCreatureIdFromPath(result?.sourceUrl);
+}
+
+function localImageUrl(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    return new URL(value, `${LOCAL_PF2_API_BASE_URL}/`).href;
+  } catch {
+    return null;
+  }
+}
+
+function localMonsterRows(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.rows)) return data.rows;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data?.monsters)) return data.monsters;
+  return [];
+}
+
+function localMonsterAonId(row) {
+  const value = row?.AonId ?? row?.aonId ?? row?.aon_id ?? row?.legacy_id ?? row?.legacyId;
+  const id = Number(value);
+  return Number.isFinite(id) ? id : null;
+}
+
+function pickLocalMonster(rows, name, aonId) {
+  const lowerName = String(name ?? "").trim().toLocaleLowerCase();
+  const exact = rows.filter((row) => String(row?.Name ?? row?.name ?? "").trim().toLocaleLowerCase() === lowerName);
+  if (Number.isFinite(aonId)) {
+    return exact.find((row) => localMonsterAonId(row) === aonId) ?? rows.find((row) => localMonsterAonId(row) === aonId) ?? exact[0] ?? null;
+  }
+  return exact[0] ?? rows[0] ?? null;
+}
+
+async function lookupLocalMonsterImage(name, aonId = null) {
+  const query = String(name ?? "").trim();
+  if (!query) return null;
+
+  const params = new URLSearchParams({ name: query, limit: "8" });
+  const data = await fetchJsonWithTimeout(`${LOCAL_PF2_API_BASE_URL}/api/monsters?${params}`);
+  const row = pickLocalMonster(localMonsterRows(data), query, aonId);
+  return localImageUrl(row?.ImageUrl ?? row?.imageUrl ?? row?.image_url ?? row?.RawJson?.image ?? row?.rawJson?.image);
+}
+
+async function withLocalMonsterArt(result, fallbackName = "") {
+  if (!result) return result;
+  const imageUrl = await lookupLocalMonsterImage(result.name || fallbackName, aonIdFromLookupResult(result));
+  return imageUrl ? { ...result, imageUrl } : result;
 }
 
 async function lookupPf2eCreatureByPath(path, variant = null) {
@@ -89,7 +147,8 @@ async function lookupPf2eCreatureByPath(path, variant = null) {
       minimum_should_match: 1,
     },
   });
-  return creatureFromAonHit(pickAonCreatureByPath(hits, path), variant);
+  const result = creatureFromAonHit(pickAonCreatureByPath(hits, path), variant);
+  return withLocalMonsterArt(result);
 }
 
 async function lookupPf2eCreature(query, variant = null) {
@@ -98,7 +157,8 @@ async function lookupPf2eCreature(query, variant = null) {
       must: [{ term: { category: "creature" } }, { match: { name: query } }],
     },
   });
-  return creatureFromAonHit(pickAonCreatureHit(hits, query), variant);
+  const result = creatureFromAonHit(pickAonCreatureHit(hits, query), variant);
+  return withLocalMonsterArt(result, query);
 }
 
 const helpers = {
