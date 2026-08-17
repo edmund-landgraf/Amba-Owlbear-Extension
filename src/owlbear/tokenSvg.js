@@ -44,6 +44,64 @@ export async function svgFileWithEmbeddedTokenFont(svgFile) {
   return new File([text.replaceAll(TOKEN_FONT_URL, src)], svgFile.name, { type: "image/svg+xml" });
 }
 
+function tokenGlyphs(text, size) {
+  const glyphs = Array.from(text || "?");
+  if (glyphs.length <= 1) {
+    return `<text x="256" y="282" text-anchor="middle" dominant-baseline="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="${size}"
+        font-weight="800" fill="#ffffff" stroke="#1f160f" stroke-width="12"
+        paint-order="stroke fill">${escapeXml(glyphs[0] || "?")}</text>`;
+  }
+
+  const hasSubscript = glyphs.length >= 4;
+  const mainGlyphs = glyphs.slice(0, hasSubscript ? 3 : glyphs.length);
+  const subscriptGlyph = hasSubscript ? glyphs[3] : null;
+  if (hasSubscript && mainGlyphs.length === 3) {
+    return [
+      `<text x="212" y="282" text-anchor="middle" dominant-baseline="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="250"
+        font-weight="800" fill="#ffffff" stroke="#1f160f" stroke-width="12"
+        paint-order="stroke fill">${escapeXml(mainGlyphs[0])}</text>`,
+      `<text x="323" y="226" text-anchor="middle" dominant-baseline="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="96"
+        font-weight="800" fill="#ffffff" stroke="#1f160f" stroke-width="8"
+        paint-order="stroke fill">${escapeXml(mainGlyphs[1])}</text>`,
+      `<text x="323" y="310" text-anchor="middle" dominant-baseline="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="96"
+        font-weight="800" fill="#ffffff" stroke="#1f160f" stroke-width="8"
+        paint-order="stroke fill">${escapeXml(mainGlyphs[2])}</text>`,
+      `<text x="374" y="326" text-anchor="middle" dominant-baseline="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="148"
+        font-weight="800" fill="#ffffff" stroke="#1f160f" stroke-width="6"
+        paint-order="stroke fill">${escapeXml(subscriptGlyph)}</text>`,
+    ].join("\n  ");
+  }
+
+  const primarySize = Math.max(250, size);
+  const secondarySize = mainGlyphs.length === 2 ? 142 : 120;
+  const primaryWidth = primarySize * 0.62;
+  const secondaryWidth = secondarySize * 0.62;
+  const totalWidth = primaryWidth + secondaryWidth * (mainGlyphs.length - 1);
+  const groupOffset = mainGlyphs.length >= 3 ? 26 : 0;
+  let x = 256 - totalWidth / 2 + groupOffset;
+  const parts = [];
+
+  parts.push(`<text x="${x + primaryWidth / 2}" y="282" text-anchor="middle" dominant-baseline="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="${primarySize}"
+        font-weight="800" fill="#ffffff" stroke="#1f160f" stroke-width="12"
+        paint-order="stroke fill">${escapeXml(mainGlyphs[0])}</text>`);
+  x += primaryWidth;
+
+  for (const glyph of mainGlyphs.slice(1)) {
+    parts.push(`<text x="${x + secondaryWidth / 2}" y="286" text-anchor="middle" dominant-baseline="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="${secondarySize}"
+        font-weight="800" fill="#ffffff" stroke="#1f160f" stroke-width="8"
+        paint-order="stroke fill">${escapeXml(glyph)}</text>`);
+    x += secondaryWidth;
+  }
+
+  return parts.join("\n  ");
+}
 function letterMarkup({ label, name, color, fontSize, fallbackName }) {
   const title = escapeXml(name || label || fallbackName);
   const text = escapeXml(label || "?");
@@ -76,10 +134,7 @@ export function monsterTokenSvg({ label, name, color = "#7c3aed", fontSize = 170
   <title>${title}</title>
   <circle cx="256" cy="256" r="222" fill="url(#${fillId})" stroke="#21170f" stroke-width="24" filter="url(#${shadowId})"/>
   <circle cx="256" cy="256" r="184" fill="none" stroke="#f7efe2" stroke-opacity="0.62" stroke-width="8"/>
-  <text x="256" y="282" text-anchor="middle" dominant-baseline="middle"
-        font-family="Arial, Helvetica, sans-serif" font-size="${size}"
-        font-weight="800" fill="#ffffff" stroke="#1f160f" stroke-width="12"
-        paint-order="stroke fill">${text}</text>
+  ${tokenGlyphs(text, size)}
 </svg>`.trim();
 }
 
