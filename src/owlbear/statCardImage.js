@@ -102,7 +102,15 @@ export async function renderStatCardSvgFile({
   for (const { label, value } of rows) {
     if (y > height - 36) break;
     const labelText = `${String(label).padEnd(11, " ")} `;
-    const wrapped = wrapLine(value, maxWidth - labelWidth, labelSize);
+    const rowMaxWidth =
+      artBounds && y < artBounds.y + artBounds.height + lineHeight
+        ? textMaxWidth
+        : maxWidth;
+    const wrapped = wrapLine(
+      value,
+      Math.max(120, rowMaxWidth - labelWidth),
+      labelSize
+    );
     for (let index = 0; index < wrapped.length; index += 1) {
       if (y > height - 36) break;
       if (index === 0) {

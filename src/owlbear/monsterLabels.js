@@ -2,6 +2,7 @@ const SKIP_WORDS = new Set(["the", "of", "a", "an", "elite", "weak"]);
 
 function words(value) {
   return String(value ?? "")
+    .replace(/\([^)]*\)/g, " ")
     .replace(/[^a-z0-9 ]+/gi, " ")
     .trim()
     .split(/\s+/)
