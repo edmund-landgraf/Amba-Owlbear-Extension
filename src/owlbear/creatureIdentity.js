@@ -1,3 +1,5 @@
+import { extractAonCreaturePath } from "./aonStatBlock.js";
+
 const VARIANT_PATTERN = /^(elite|weak)\b\s*[—–\-:]*\s*/i;
 const LEADING_QUANTITY = /^(\d+)\s*[x×]\s+/i;
 const TRAILING_QUANTITY = /\s+[x×]\s*(\d+)\s*$/i;
@@ -14,6 +16,23 @@ function normalizeText(value) {
 function positiveInt(value) {
   const count = Number.parseInt(value, 10);
   return Number.isFinite(count) && count > 0 ? count : null;
+}
+
+const GROUP_SEPARATOR = /\s*[—–]\s*|\s+-\s+/;
+const EMBEDDED_QUANTITY = /(?:^|\s)(\d+)\s*[x×]\s+/i;
+
+function stripGroupPrefix(text) {
+  const parts = text.split(GROUP_SEPARATOR).map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return text;
+  return parts[parts.length - 1];
+}
+
+function stripEmbeddedQuantity(text, count) {
+  const match = text.match(EMBEDDED_QUANTITY);
+  if (!match) return { text, count };
+  const nextCount = count ?? positiveInt(match[1]);
+  const after = text.slice(match.index + match[0].length).trim();
+  return { text: after || text, count: nextCount };
 }
 
 export function parseCreatureIdentity(value) {
@@ -35,6 +54,12 @@ export function parseCreatureIdentity(value) {
     variant = leadingVariant[1].toLocaleLowerCase();
     text = text.slice(leadingVariant[0].length).trim();
   }
+
+  text = stripGroupPrefix(text);
+
+  const embedded = stripEmbeddedQuantity(text, count);
+  text = embedded.text;
+  count = embedded.count;
 
   const trailingQty = text.match(TRAILING_QUANTITY);
   if (trailingQty) {
@@ -75,6 +100,25 @@ function structuredVariant(block) {
   return value === "elite" || value === "weak" ? value : null;
 }
 
+function blockLookupText(block) {
+  return [
+    block?.sourceUrl,
+    block?.statBlock,
+    block?.content,
+    block?.description,
+    block?.payload?.statBlock,
+    block?.payload?.content,
+    block?.npc?.statBlock,
+    block?.monster?.statBlock,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function monsterAonPath(block) {
+  return extractAonCreaturePath(blockLookupText(block));
+}
+
 export function monsterIdentity(block) {
   const rawTitle = monsterRawTitle(block);
   const fromTitle = parseCreatureIdentity(rawTitle);
@@ -89,5 +133,6 @@ export function monsterIdentity(block) {
     count,
     variant,
     rawTitle,
+    aonPath: monsterAonPath(block),
   };
 }

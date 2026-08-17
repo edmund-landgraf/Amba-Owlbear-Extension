@@ -349,9 +349,9 @@ async function resolveMonsterGroups(encounter) {
   await Promise.all(
     groups.map(async (group) => {
       const identity = monsterIdentity(group.block);
-      const query = identity.candidateName || monsterRawTitle(group.block);
       const looked = await lookupCreatureName({
-        query,
+        aonPath: identity.aonPath,
+        query: identity.aonPath ? "" : identity.candidateName || monsterRawTitle(group.block),
         ruleset: encounterRuleset(encounter, group.block),
         variant: identity.variant,
       });

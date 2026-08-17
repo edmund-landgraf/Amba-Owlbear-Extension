@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { monsterIdentity, parseCreatureIdentity } from "./creatureIdentity.js";
+import { monsterAonPath, monsterIdentity, parseCreatureIdentity } from "./creatureIdentity.js";
+import { extractAonCreaturePath } from "./aonStatBlock.js";
 import { labelBaseForBlocks, labelBaseFromName, numberedLabel } from "./monsterLabels.js";
 
 test("parses leading quantity and elite variant", () => {
@@ -22,6 +23,41 @@ test("parses leading quantity and elite variant", () => {
     variant: null,
     raw: "Type Namorrodor x 2",
   });
+  assert.deepEqual(parseCreatureIdentity("Swarm — 6× Nyktera"), {
+    name: "Nyktera",
+    count: 6,
+    variant: null,
+    raw: "Swarm — 6× Nyktera",
+  });
+});
+
+test("extracts AoN creature path from markdown and html links", () => {
+  assert.equal(
+    extractAonCreaturePath("Source: Bestiary 3 • [AoN](https://2e.aonprd.com/Monsters.aspx?ID=123)"),
+    "/Monsters.aspx?ID=123"
+  );
+  assert.equal(
+    extractAonCreaturePath('<a href="https://2e.aonprd.com/Monsters.aspx?ID=456">AoN</a>'),
+    "/Monsters.aspx?ID=456"
+  );
+  assert.equal(
+    extractAonCreaturePath(
+      [
+        "Source: Monster Core, Bestiary · [AoN](https://2e.aonprd.com/Monsters.aspx?ID=2102)",
+        "[Gargoyle](https://2e.aonprd.com/Monsters.aspx?ID=2102)",
+        "[Acrobatics](https://2e.aonprd.com/Skills.aspx?ID=1) +10",
+        "[darkvision](https://2e.aonprd.com/Rules.aspx?ID=417)",
+      ].join("\n")
+    ),
+    "/Monsters.aspx?ID=2102"
+  );
+  assert.equal(monsterAonPath({ name: "Swarm — 6× Nyktera", statBlock: "Goblin" }), null);
+  const identity = monsterIdentity({
+    name: "Swarm — 6× Nyktera",
+    statBlock: "Nyktera x 6 Source: Bestiary 3 • [AoN](https://2e.aonprd.com/Monsters.aspx?ID=789)",
+  });
+  assert.equal(identity.aonPath, "/Monsters.aspx?ID=789");
+  assert.equal(identity.candidateName, "Nyktera");
 });
 
 test("monsterIdentity prefers parsed count over missing quantity", () => {

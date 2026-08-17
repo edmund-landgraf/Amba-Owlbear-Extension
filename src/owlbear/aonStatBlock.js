@@ -5,6 +5,55 @@ export function aonMonsterUrl(path) {
   return path.startsWith("http") ? path : `${AON_ORIGIN}${path}`;
 }
 
+const AON_MARKDOWN = /\[([^\]]*)\]\(\s*((?:https?:\/\/)?(?:www\.)?(?:2e\.)?aonprd\.com[^)]+)\)/gi;
+const AON_HTML = /<a\b[^>]*href=["']((?:https?:\/\/)?(?:www\.)?(?:2e\.)?aonprd\.com[^"']+)["'][^>]*>(.*?)<\/a>/gi;
+const AON_BARE = /(?:https?:\/\/)?(?:www\.)?(?:2e\.)?aonprd\.com(\/[^)\s"'<>]+)/gi;
+const CREATURE_PAGE = /^\/(monsters|creatures|npcs|monsterdisplay)\.aspx/i;
+
+function toAonPath(raw) {
+  const cleaned = String(raw ?? "").replace(/&amp;/g, "&").trim();
+  if (!cleaned) return null;
+  try {
+    const url = new URL(cleaned.startsWith("http") ? cleaned : `https://${cleaned.replace(/^\/+/, "")}`);
+    return `${url.pathname}${url.search}`.replace(/\/+$/, "") || null;
+  } catch {
+    return null;
+  }
+}
+
+function stripTags(value) {
+  return String(value ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function aonLinksFrom(value) {
+  const text = String(value ?? "");
+  const links = [];
+  const seen = new Set();
+
+  const push = (raw, label = "") => {
+    const path = toAonPath(raw);
+    if (!path || seen.has(path.toLocaleLowerCase())) return;
+    seen.add(path.toLocaleLowerCase());
+    links.push({ path, label: stripTags(label) });
+  };
+
+  for (const match of text.matchAll(AON_MARKDOWN)) push(match[2], match[1]);
+  for (const match of text.matchAll(AON_HTML)) push(match[1], match[2]);
+  for (const match of text.matchAll(AON_BARE)) push(match[0]);
+  return links;
+}
+
+export function extractAonCreaturePath(value) {
+  const links = aonLinksFrom(value).filter((link) => CREATURE_PAGE.test(link.path));
+  if (!links.length) return null;
+  return (links.find((link) => /^aon$/i.test(link.label)) ?? links[0]).path;
+}
+
+export function aonCreatureIdFromPath(path) {
+  const match = String(path ?? "").match(/[?&]ID=(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
 export function stripAonMarkup(value) {
   return String(value ?? "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")

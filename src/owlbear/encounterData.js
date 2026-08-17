@@ -2,7 +2,7 @@ import { getMonsterTokenImageUrl, toAmbaUrl } from "../amba/ambaApi.js";
 import { monsterIdentity, monsterRawTitle } from "./creatureIdentity.js";
 import { monsterTokenSvgUrl } from "./tokenSvg.js";
 
-export { monsterIdentity, monsterRawTitle, parseCreatureIdentity } from "./creatureIdentity.js";
+export { monsterAonPath, monsterIdentity, monsterRawTitle, parseCreatureIdentity } from "./creatureIdentity.js";
 
 export const TOKEN_COLORS = [
   "#7c3aed",
