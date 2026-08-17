@@ -1,5 +1,8 @@
 import { getMonsterTokenImageUrl, toAmbaUrl } from "../amba/ambaApi.js";
+import { monsterIdentity, monsterRawTitle } from "./creatureIdentity.js";
 import { monsterTokenSvgUrl } from "./tokenSvg.js";
+
+export { monsterIdentity, monsterRawTitle, parseCreatureIdentity } from "./creatureIdentity.js";
 
 export const TOKEN_COLORS = [
   "#7c3aed",
@@ -63,6 +66,30 @@ export function mapDpi(encounter) {
   return Number.isFinite(dpi) && dpi > 0 ? dpi : undefined;
 }
 
+export function encounterMapGrid(encounter) {
+  const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
+  return map?.grid ?? map?.payload?.grid ?? encounter.grid ?? null;
+}
+
+export function encounterPlacements(encounter) {
+  const raw =
+    encounter.owlbearPlacements ??
+    encounter.placements ??
+    encounter.metadata?.owlbearPlacements ??
+    encounter.metadata?.placements;
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.placements)) return raw.placements;
+  return [];
+}
+
+export function savedMapPlacement(encounter) {
+  return (
+    encounterPlacements(encounter).find(
+      (placement) => placement?.kind === "encounter-map" || placement?.kind === "map"
+    ) ?? null
+  );
+}
+
 export function monsterBlocks(encounter) {
   const blocks =
     encounter.monsterBlocks ??
@@ -74,7 +101,7 @@ export function monsterBlocks(encounter) {
 }
 
 export function monsterName(block) {
-  return block.name ?? block.title ?? block.npc?.name ?? block.monster?.name ?? "Monster";
+  return monsterIdentity(block).name;
 }
 
 export function monsterId(block) {
@@ -95,13 +122,12 @@ export function monsterSourceId(block) {
 }
 
 export function monsterCount(block) {
-  const value = block.count ?? block.quantity ?? block.number ?? block.instances?.length ?? 1;
-  const count = Number.parseInt(value, 10);
-  return Number.isFinite(count) && count > 0 ? count : 1;
+  return monsterIdentity(block).count;
 }
 
 export function monsterStatBlock(block) {
   return (
+    block.resolvedStatBlock ??
     block.statBlock ??
     block.content ??
     block.description ??

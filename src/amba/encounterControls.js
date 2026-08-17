@@ -273,7 +273,7 @@ export function wireEncounterControls({
     if (!moduleId) return;
 
     encounterStatus.classList.remove("error");
-    encounterStatus.textContent = "Saving token placements to AMBA...";
+    encounterStatus.textContent = "Saving map and token placements to AMBA...";
 
     try {
       saveEncounterPlacements.disabled = true;
@@ -281,9 +281,9 @@ export function wireEncounterControls({
       if (!encounter) throw new Error("Select an encounter before saving placements.");
 
       const count = await saveEncounterPlacementsToAmba({ moduleId, encounter });
-      encounterStatus.textContent = `Saved ${count} monster token placement${count === 1 ? "" : "s"} to AMBA.`;
+      encounterStatus.textContent = `Saved ${count} map/token placement${count === 1 ? "" : "s"} to AMBA.`;
       if (encounterDiagnostics) {
-        encounterDiagnostics.textContent = "Placement payload included Owlbear item IDs, token instance IDs, layers, positions, rotation, and scale.";
+        encounterDiagnostics.textContent = "Placement payload included Owlbear item IDs, map and token instance IDs, layers, positions, rotation, and scale.";
       }
     } catch (error) {
       encounterStatus.textContent = errorMessage(error, "Unable to save token placements.");

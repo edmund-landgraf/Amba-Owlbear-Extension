@@ -1,5 +1,6 @@
 import { imageInfoFromUrl, safeName } from "../owlbear/imageUtils.js";
 import {
+  encounterMapGrid,
   encounterTitle,
   mapDpi,
   mapSourceId,
@@ -8,11 +9,6 @@ import {
   monsterCount,
 } from "../owlbear/encounterData.js";
 import { inferMapGrid } from "../owlbear/mapGridInference.js";
-
-function mapGrid(encounter) {
-  const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
-  return map?.grid ?? map?.payload?.grid ?? encounter.grid ?? null;
-}
 
 function gridSummary(grid, dpi) {
   const scale = grid?.scale ?? grid?.gridScale ?? "5 ft";
@@ -25,6 +21,7 @@ function gridSummary(grid, dpi) {
   if (scale) parts.push(`1 square = ${scale}`);
   if (grid?.source === "inferred") parts.push("inferred from image");
   if (grid?.source === "metadata") parts.push("from AMBA metadata");
+  if (grid?.source === "fallback") parts.push("fallback one-square sizing");
   return parts.join(", ") || "Grid metadata not supplied";
 }
 
@@ -33,7 +30,7 @@ export async function analyzeEncounterForExport(encounter) {
   const blocks = monsterBlocks(encounter);
   const totalMonsters = blocks.reduce((sum, block) => sum + monsterCount(block), 0);
   const dpi = mapDpi(encounter);
-  const grid = mapGrid(encounter);
+  const grid = encounterMapGrid(encounter);
   const result = {
     title: encounterTitle(encounter),
     hasMap: Boolean(url),
@@ -41,6 +38,7 @@ export async function analyzeEncounterForExport(encounter) {
     mapSourceId: mapSourceId(encounter),
     mapDpi: dpi,
     mapGridSummary: gridSummary(grid, dpi),
+    mapWarnings: [],
     mapReady: false,
     mapError: null,
     mapImage: null,
@@ -63,6 +61,7 @@ export async function analyzeEncounterForExport(encounter) {
     if (inferredGrid) {
       info.grid.dpi = inferredGrid.cellSize;
       result.mapGridSummary = gridSummary(inferredGrid, inferredGrid.cellSize);
+      result.mapWarnings = inferredGrid.warnings ?? [];
     }
     result.mapImage = {
       width: info.image.width,
@@ -90,6 +89,7 @@ export function renderEncounterAnalysis(container, analysis, options = {}) {
     <div class="encounter-analysis">
       <div><strong>Encounter:</strong> ${escapeHtml(analysis.title)}</div>
       <div><strong>Map:</strong> ${escapeHtml(mapDetail)}</div>
+      ${analysis.mapWarnings?.length ? `<div><strong>Map warnings:</strong> ${escapeHtml(analysis.mapWarnings.join(" "))}</div>` : ""}
       <div><strong>Monster blocks:</strong> ${analysis.monsterBlockCount} block${analysis.monsterBlockCount === 1 ? "" : "s"}; ${analysis.totalMonsterTokens} token${analysis.totalMonsterTokens === 1 ? "" : "s"} planned</div>
       <div><strong>Export plan:</strong> ${escapeHtml(exportPlanText(analysis, options))}</div>
     </div>

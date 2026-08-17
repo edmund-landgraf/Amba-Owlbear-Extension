@@ -2,14 +2,16 @@ import { buildImageUpload } from "@owlbear-rodeo/sdk";
 import {
   getPcNoteImageUrl,
   getPcSheetImageUrl,
-  getPcTokenImageUrl,
+  // getPcTokenImageUrl,
   toAmbaUrl,
 } from "../amba/ambaApi.js";
+import { firstLetterLabel, letterTokenSvg, letterTokenSvgUrl } from "./tokenSvg.js";
 import {
   fetchImageBlob,
   imageInfoFromUrl,
   rasterizeSvgFile,
   safeName,
+  sceneImageFromFile,
 } from "./imageUtils.js";
 import { rasterizedTokenInfo } from "./tokenImage.js";
 
@@ -52,17 +54,30 @@ export async function tokenInfo(moduleId, pc, color = TOKEN_COLOR) {
     try {
       return await imageInfoFromUrl(url, `${safeName(pc.name)}-portrait`);
     } catch {
-      // Fall through to generated AMBA token if portrait metadata is stale.
+      // Fall through to a generated first-letter token if portrait metadata is stale.
     }
   }
 
-  const url = getPcTokenImageUrl(moduleId, pc.id, color);
-  return rasterizedTokenInfo(url, `${safeName(pc.name)}-token`);
+  // const url = getPcTokenImageUrl(moduleId, pc.id, color);
+  // return rasterizedTokenInfo(url, `${safeName(pc.name)}-token`);
+  return rasterizedTokenInfo(
+    letterTokenSvgUrl({
+      label: firstLetterLabel(pc.name),
+      name: pc.name,
+      color,
+    }),
+    `${safeName(pc.name)}-token`
+  );
 }
 
 export async function generatedTokenUpload(moduleId, moduleTitle, pc, color = TOKEN_COLOR) {
-  const url = getPcTokenImageUrl(moduleId, pc.id, color);
-  const svgFile = await fetchImageBlob(url, `${safeName(pc.name)}-token.svg`);
+  // const url = getPcTokenImageUrl(moduleId, pc.id, color);
+  // const svgFile = await fetchImageBlob(url, `${safeName(pc.name)}-token.svg`);
+  const svgFile = new File(
+    [letterTokenSvg({ label: firstLetterLabel(pc.name), name: pc.name, color })],
+    `${safeName(pc.name)}-token.svg`,
+    { type: "image/svg+xml" }
+  );
   const pngFile = await rasterizeSvgFile(svgFile, `${safeName(pc.name)}-token.png`, 512, 512);
   return buildImageUpload(pngFile)
     .name(pc.name)
@@ -74,14 +89,13 @@ export async function generatedTokenUpload(moduleId, moduleTitle, pc, color = TO
 
 export async function noteInfo(moduleId, pc) {
   const url = getPcNoteImageUrl(moduleId, pc.id, TOKEN_COLOR);
-  return {
-    image: { width: 512, height: 512, url, mime: "image/svg+xml" },
-    grid: { dpi: 512, offset: { x: 256, y: 256 } },
-  };
+  const svgFile = await fetchImageBlob(url, `${safeName(pc.name)}-note.svg`);
+  const pngFile = await rasterizeSvgFile(svgFile, `${safeName(pc.name)}-note.png`, 512, 512);
+  return sceneImageFromFile(pngFile, { width: 512, height: 512, dpi: 512, mime: "image/png" });
 }
 
-export async function snapshotInfo(moduleId, pc) {
-  const url = getPcSheetImageUrl(moduleId, pc.id, TOKEN_COLOR);
+export async function snapshotInfo(moduleId, pc, color = TOKEN_COLOR) {
+  const url = getPcSheetImageUrl(moduleId, pc.id, color);
   const info = await imageInfoFromUrl(url, `${safeName(pc.name)}-character-sheet-snapshot.png`);
   return {
     ...info,

@@ -1,12 +1,13 @@
+import { isMissingSceneError, NO_SCENE_MESSAGE, obrErrorMessage } from "../owlbear/sceneService.js";
+
 export function errorMessage(error, fallback) {
   console.error(fallback, error);
-  if (error instanceof Error && error.message) {
-    if (/Not authenticated/i.test(error.message)) {
-      return "Not authenticated. Click Connect AMBA, approve the popup, then the extension will reload.";
-    }
-    return error.message;
+  if (isMissingSceneError(error)) return NO_SCENE_MESSAGE;
+  const message = obrErrorMessage(error);
+  if (/Not authenticated/i.test(message)) {
+    return "Not authenticated. Click Connect AMBA, approve the popup, then the extension will reload.";
   }
-  if (typeof error === "string" && error) return error;
+  if (message) return message;
   try {
     const json = JSON.stringify(error);
     return json && json !== "{}" ? json : fallback;
@@ -97,5 +98,6 @@ export function encounterImportSummary(result) {
   }
 
   const skipped = (result.mapSkipped ? 1 : 0) + (result.monsterTokensSkipped ?? 0);
-  return `Imported ${pieces.join(", ")}${skipped ? `; preserved ${skipped} existing item${skipped === 1 ? "" : "s"}.` : "."}`;
+  const warningText = result.mapWarnings?.length ? ` Map warning: ${result.mapWarnings.join(" ")}` : "";
+  return `Imported ${pieces.join(", ")}${skipped ? `; preserved ${skipped} existing item${skipped === 1 ? "" : "s"}.` : "."}${warningText}`;
 }

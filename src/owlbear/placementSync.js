@@ -22,11 +22,14 @@ export async function saveEncounterPlacementsToAmba({ moduleId, encounter }) {
   const id = encounterId(encounter);
   const items = await getImportedEncounterItems(moduleId, id);
   const placements = items
-    .filter((item) => item.metadata?.[META.kind] === "monster-token")
+    .filter((item) => {
+      const kind = item.metadata?.[META.kind];
+      return kind === "monster-token" || kind === "encounter-map";
+    })
     .map(placementFromItem);
 
   if (!placements.length) {
-    throw new Error("No imported AMBA monster tokens were found in the current Owlbear scene.");
+    throw new Error("No imported AMBA map or monster tokens were found in the current Owlbear scene.");
   }
 
   await saveOwlbearPlacements(moduleId, id, {

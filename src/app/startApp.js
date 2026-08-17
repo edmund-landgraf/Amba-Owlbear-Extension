@@ -4,6 +4,7 @@ import { wireRoomTest } from "../owlbear/roomTest.js";
 import { wireOwlbearAuthBridge } from "../amba/authBridge.js";
 import { wireAmbaAuthTest } from "../amba/authTest.js";
 import { wirePcLoader } from "../amba/pcLoader.js";
+import { unlockAmbaStatCardsInCurrentScene } from "../owlbear/sceneItems.js";
 
 export async function startApp() {
   renderAppShell();
@@ -11,6 +12,7 @@ export async function startApp() {
   await OBR.onReady();
 
   document.getElementById("status").textContent = "Connected to Owlbear!";
+  await unlockAmbaStatCardsInCurrentScene();
   wireOwlbearAuthBridge();
   wireRoomTest();
   wireAmbaAuthTest();

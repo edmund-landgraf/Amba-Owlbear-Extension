@@ -3,30 +3,84 @@ function numeric(value) {
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
+function finiteNumber(value) {
+  const number = Number.parseFloat(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+export function mapGridOffset(grid, imageSize) {
+  const raw = grid?.offset ?? grid?.gridOffset;
+  const x = finiteNumber(raw?.x ?? grid?.offsetX ?? grid?.originX);
+  const y = finiteNumber(raw?.y ?? grid?.offsetY ?? grid?.originY);
+  if (x != null && y != null) return { x, y };
+  return {
+    x: (imageSize?.width ?? 0) / 2,
+    y: (imageSize?.height ?? 0) / 2,
+  };
+}
+
+function dpiAxisWarnings(imageSize, columns, rows, cellSize) {
+  const warnings = [];
+  if (!imageSize?.width || !imageSize?.height || !columns || !rows) return warnings;
+
+  const dpiX = imageSize.width / columns;
+  const dpiY = imageSize.height / rows;
+  const average = (dpiX + dpiY) / 2;
+  if (average > 0 && Math.abs(dpiX - dpiY) / average > 0.05) {
+    warnings.push(
+      `Map dpiX (${dpiX.toFixed(1)}) and dpiY (${dpiY.toFixed(1)}) differ; export metadata or raster size may be inconsistent.`
+    );
+  }
+  if (cellSize && Math.abs(dpiX - cellSize) / cellSize > 0.05) {
+    warnings.push(
+      `AMBA cellSize ${Math.round(cellSize)} does not match width/columns (${dpiX.toFixed(1)}px).`
+    );
+  }
+  return warnings;
+}
+
+function withGridAlignment(gridResult, explicitGrid, imageSize) {
+  const warnings = [...(gridResult.warnings ?? []), ...dpiAxisWarnings(imageSize, gridResult.columns, gridResult.rows, gridResult.cellSize)];
+  return {
+    ...gridResult,
+    offset: mapGridOffset(explicitGrid, imageSize),
+    warnings,
+  };
+}
+
 export function explicitMapGrid(grid, imageSize) {
   if (!grid) return null;
   const cellSize = numeric(grid.cellSize ?? grid.dpi);
   const columns = numeric(grid.columns);
   const rows = numeric(grid.rows);
+  const scale = grid.scale ?? grid.gridScale ?? "5 ft";
 
   if (cellSize) {
-    return {
-      cellSize,
-      columns: columns ?? (imageSize?.width ? Math.round(imageSize.width / cellSize) : null),
-      rows: rows ?? (imageSize?.height ? Math.round(imageSize.height / cellSize) : null),
-      scale: grid.scale ?? grid.gridScale ?? "5 ft",
-      source: "metadata",
-    };
+    return withGridAlignment(
+      {
+        cellSize,
+        columns: columns ?? (imageSize?.width ? Math.round(imageSize.width / cellSize) : null),
+        rows: rows ?? (imageSize?.height ? Math.round(imageSize.height / cellSize) : null),
+        scale,
+        source: "metadata",
+      },
+      grid,
+      imageSize
+    );
   }
 
   if (columns && rows && imageSize?.width && imageSize?.height) {
-    return {
-      cellSize: (imageSize.width / columns + imageSize.height / rows) / 2,
-      columns,
-      rows,
-      scale: grid.scale ?? grid.gridScale ?? "5 ft",
-      source: "metadata",
-    };
+    return withGridAlignment(
+      {
+        cellSize: (imageSize.width / columns + imageSize.height / rows) / 2,
+        columns,
+        rows,
+        scale,
+        source: "metadata",
+      },
+      grid,
+      imageSize
+    );
   }
 
   return null;
@@ -138,18 +192,44 @@ async function inferPeriodFromImage(file) {
 }
 
 export async function inferMapGrid(imageInfo, explicitGrid) {
-  const explicit = explicitMapGrid(explicitGrid, imageInfo?.image);
+  const imageSize = imageInfo?.image;
+  const explicit = explicitMapGrid(explicitGrid, imageSize);
   if (explicit) return explicit;
 
   const inferredCellSize = await inferPeriodFromImage(imageInfo?.file).catch(() => null);
-  if (!inferredCellSize || !imageInfo?.image?.width || !imageInfo?.image?.height) return null;
+  if (inferredCellSize && imageSize?.width && imageSize?.height) {
+    return withGridAlignment(
+      {
+        cellSize: inferredCellSize,
+        columns: Math.round(imageSize.width / inferredCellSize),
+        rows: Math.round(imageSize.height / inferredCellSize),
+        scale: explicitGrid?.scale ?? explicitGrid?.gridScale ?? "5 ft",
+        source: "inferred",
+        warnings: ["Grid cell size was inferred from the map image."],
+      },
+      explicitGrid,
+      imageSize
+    );
+  }
 
-  return {
-    cellSize: inferredCellSize,
-    columns: Math.round(imageInfo.image.width / inferredCellSize),
-    rows: Math.round(imageInfo.image.height / inferredCellSize),
-    scale: "5 ft",
-    source: "inferred",
-  };
+  if (imageSize?.width && imageSize?.height) {
+    const cellSize = Math.max(imageSize.width, imageSize.height);
+    return withGridAlignment(
+      {
+        cellSize,
+        columns: Math.max(1, Math.round(imageSize.width / cellSize)),
+        rows: Math.max(1, Math.round(imageSize.height / cellSize)),
+        scale: explicitGrid?.scale ?? explicitGrid?.gridScale ?? "5 ft",
+        source: "fallback",
+        warnings: [
+          "No AMBA grid metadata and image inference failed. Map was sized as one square (max edge). Align manually in Owlbear.",
+        ],
+      },
+      explicitGrid,
+      imageSize
+    );
+  }
+
+  return null;
 }
 

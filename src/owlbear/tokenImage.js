@@ -1,22 +1,31 @@
-import { fetchImageBlob, imageSizeFromBlob, rasterizeSvgFile } from "./imageUtils.js";
+import { fetchImageBlob, imageSizeFromBlob, rasterizeSvgFile, sceneImageFromFile } from "./imageUtils.js";
+import { labelFontSize } from "./monsterLabels.js";
+import { monsterTokenSvg } from "./tokenSvg.js";
+
+export async function rasterizedMonsterTokenFile({ label, name, color }) {
+  const svg = monsterTokenSvg({ label, name, color, fontSize: labelFontSize(label) });
+  const svgFile = new File([svg], `${label || "monster"}-token.svg`, { type: "image/svg+xml" });
+  return rasterizeSvgFile(svgFile, `${label || "monster"}-token.png`, 512, 512);
+}
+
+function fileFromDataUrl(url, filename) {
+  const match = String(url).match(/^data:([^;,]+)?(?:;charset=[^;,]+)?;(?:base64,)?/i);
+  if (!match) return null;
+  if (url.includes(";base64,")) {
+    const binary = atob(url.slice(url.indexOf(",") + 1));
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new File([bytes], filename, { type: match[1] || "image/svg+xml" });
+  }
+  const svg = decodeURIComponent(url.slice(url.indexOf(",") + 1));
+  return new File([svg], filename, { type: match[1] || "image/svg+xml" });
+}
 
 export async function rasterizedTokenInfo(url, filename) {
-  const svgFile = await fetchImageBlob(url, `${filename}.svg`);
+  const svgFile = fileFromDataUrl(url, `${filename}.svg`) ?? (await fetchImageBlob(url, `${filename}.svg`));
   if (!/svg/i.test(svgFile.type) && !/\.svg($|\?)/i.test(url)) {
-    const size = await imageSizeFromBlob(svgFile, filename);
-    const objectUrl = URL.createObjectURL(svgFile);
-    return {
-      file: svgFile,
-      image: { ...size, url: objectUrl, mime: svgFile.type || "image/png" },
-      grid: { dpi: Math.max(size.width, size.height), offset: { x: size.width / 2, y: size.height / 2 } },
-    };
+    return sceneImageFromFile(svgFile);
   }
 
   const pngFile = await rasterizeSvgFile(svgFile, `${filename}.png`, 512, 512);
-  const objectUrl = URL.createObjectURL(pngFile);
-  return {
-    file: pngFile,
-    image: { width: 512, height: 512, url: objectUrl, mime: "image/png" },
-    grid: { dpi: 512, offset: { x: 256, y: 256 } },
-  };
+  return sceneImageFromFile(pngFile, { width: 512, height: 512, dpi: 512, mime: "image/png" });
 }

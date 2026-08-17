@@ -1,27 +1,35 @@
-import OBR, { buildImage, buildShape, buildText } from "@owlbear-rodeo/sdk";
+import OBR, { buildImage } from "@owlbear-rodeo/sdk";
 import { imageInfoFromUrl, safeName } from "./imageUtils.js";
+import { publishTokenPng } from "./tokenHost.js";
+import { rasterizedMonsterTokenFile } from "./tokenImage.js";
+import { rasterizeStatCardPng } from "./statCardImage.js";
 import { inferMapGrid } from "./mapGridInference.js";
-import { addItemsToCurrentScene } from "./sceneItems.js";
+import { addItemsToCurrentScene, deleteItemsFromCurrentScene, moveItemsInCurrentScene, unlockAmbaStatCardsInCurrentScene } from "./sceneItems.js";
+import { requireOpenScene } from "./sceneService.js";
 import {
   encounterId,
+  encounterMapGrid,
   encounterTitle,
   mapDpi,
   mapSourceId,
   mapUrl,
+  savedMapPlacement,
   monsterBlocks,
   monsterCount,
   monsterId,
+  monsterIdentity,
   monsterName,
+  monsterRawTitle,
   monsterSourceId,
   monsterStatBlock,
   TOKEN_COLORS,
 } from "./encounterData.js";
+import { encounterRuleset, lookupCreatureName } from "./creatureLookup.js";
 import {
   belowBounds,
   boundsFromImageInfo,
   combineBounds,
   getSceneBoundsForLayers,
-  gridPosition,
   imagePositionRightOfBounds,
   NS,
 } from "./layout.js";
@@ -33,27 +41,32 @@ import {
   saveEncounterSceneMetadata,
 } from "./encounterMetadata.js";
 
-function statBlockRichText(block) {
+function variantLabel(variant) {
+  if (variant === "elite") return "Elite";
+  if (variant === "weak") return "Weak";
+  return "Normal";
+}
+
+function isNoiseTypeRow(value) {
+  return /party level|target moderate|composition|\bx\s*\d+\b/i.test(value);
+}
+
+function statCardContent(block, { name, count, variant } = {}) {
+  const displayName = name ?? monsterName(block);
+  const quantity = count ?? monsterCount(block);
   const rawText = cleanStatText(monsterStatBlock(block));
-  const name = monsterName(block);
-  const rows = pf2eStatRows(rawText, name);
-  const headerParts = [name, block.level ? `Level ${block.level}` : "", block.source ? `Source: ${block.source}` : ""]
+  const rows = pf2eStatRows(rawText, displayName).filter(
+    (row) => row.label !== "Type" || !isNoiseTypeRow(row.value)
+  );
+  const meta = [block.level ? `Level ${block.level}` : "", block.source ? `Source: ${block.source}` : "", block.sourceUrl ?? ""]
     .filter(Boolean)
     .join("  |  ");
-
-  return [
-    {
-      type: "paragraph",
-      children: [{ text: headerParts, bold: true }],
-    },
-    ...rows.map(({ label, value }) => ({
-      type: "paragraph",
-      children: [
-        { text: `${label.padEnd(11, " ")} `, bold: true },
-        { text: value },
-      ],
-    })),
-  ];
+  return {
+    header: `${quantity}x    ${variantLabel(variant ?? block.resolvedVariant)}`,
+    name: displayName,
+    meta,
+    rows,
+  };
 }
 
 function cleanStatText(value) {
@@ -171,9 +184,11 @@ function combineAbilityAndSaveRows(rows) {
 }
 
 function monsterTypeKey(block) {
+  const identity = monsterIdentity(block);
   return [
     monsterId(block) ?? "",
-    monsterName(block).toLocaleLowerCase(),
+    identity.variant ?? "",
+    identity.name.toLocaleLowerCase(),
     cleanStatText(monsterStatBlock(block)).toLocaleLowerCase(),
   ].join("|");
 }
@@ -225,34 +240,47 @@ function monsterTypeGroups(encounter) {
   return [...groups.values()];
 }
 
-function tokenBaseFontSize(label, tokenSize) {
-  const ratio = label.length <= 1 ? 0.48 : label.length === 2 ? 0.38 : 0.3;
-  return Math.max(18, Math.round(tokenSize * ratio));
-}
+const STAT_CARD_WIDTH = 1040;
+const STAT_CARD_HEIGHT = 760;
 
-function tokenSubscriptFontSize(tokenSize) {
-  return Math.max(12, Math.round(tokenSize * 0.2));
-}
-
-function tokenLabelText(label) {
-  return [
-    {
-      type: "paragraph",
-      children: [{ text: label, bold: true }],
-    },
-  ];
-}
-
-function centeredBoxPosition(position, width, height, inset = { x: 0, y: 0 }) {
+async function monsterTokenImage(label, name, color, cells) {
+  const png = await rasterizedMonsterTokenFile({ label, name, color });
+  const url = await publishTokenPng(png);
   return {
-    x: position.x + inset.x - width / 2,
-    y: position.y + inset.y - height / 2,
+    image: { width: 512, height: 512, url, mime: "image/png" },
+    grid: { dpi: Math.round(512 / Math.max(cells, 0.5)), offset: { x: 256, y: 256 } },
   };
 }
 
-function encounterMapGrid(encounter) {
-  const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
-  return map?.grid ?? map?.payload?.grid ?? encounter.grid ?? null;
+async function applySceneGridFromAmba(grid) {
+  const scale = grid?.scale ?? grid?.gridScale ?? "5 ft";
+  try {
+    if (typeof OBR.scene.grid.setType === "function") {
+      await OBR.scene.grid.setType("SQUARE");
+    }
+    if (typeof OBR.scene.grid.setScale === "function") {
+      await OBR.scene.grid.setScale(scale);
+    }
+  } catch {
+    // Some rooms or roles cannot mutate the scene grid.
+  }
+}
+
+async function snapScenePosition(position) {
+  try {
+    if (typeof OBR.scene.grid.snapPosition === "function") {
+      return await OBR.scene.grid.snapPosition(position);
+    }
+  } catch {
+    // Keep the computed position if snapping is unavailable.
+  }
+  return position;
+}
+
+function itemScale(value) {
+  if (value && Number.isFinite(value.x) && Number.isFinite(value.y)) return value;
+  if (Number.isFinite(value)) return { x: value, y: value };
+  return null;
 }
 
 async function sceneGridDpi() {
@@ -282,15 +310,27 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems
   const inferredGrid = await inferMapGrid(info, encounterMapGrid(encounter));
   if (inferredGrid) {
     info.grid.dpi = inferredGrid.cellSize;
+    if (inferredGrid.offset) info.grid.offset = inferredGrid.offset;
+    await applySceneGridFromAmba(inferredGrid);
   }
+  const warnings = inferredGrid?.warnings ?? [];
+  const saved = savedMapPlacement(encounter);
   const mapImage = { ...info.image, url };
-  const position = imagePositionRightOfBounds(occupiedBounds, info, 1000);
-  const item = buildImage(mapImage, info.grid)
+  const stagedPosition = imagePositionRightOfBounds(occupiedBounds, info, 1000);
+  const position = saved?.position
+    ? saved.position
+    : await snapScenePosition(stagedPosition);
+  const scale = itemScale(saved?.scale);
+  const rotation = Number.isFinite(saved?.rotation) ? saved.rotation : 0;
+  const builder = buildImage(mapImage, info.grid)
     .name(`${encounterTitle(encounter)} Map`)
     .description(`AMBA encounter map for ${encounterTitle(encounter)}`)
     .layer("MAP")
     .position(position)
-    .locked(false)
+    .rotation(rotation)
+    .locked(inferredGrid?.source === "metadata");
+  if (scale) builder.scale(scale);
+  const item = builder
     .metadata({
       ...encounterItemMetadata({
         moduleId,
@@ -301,238 +341,178 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems
     })
     .build();
 
-  return { item, bounds: boundsFromImageInfo(info, position) };
+  return { item, bounds: boundsFromImageInfo(info, position), warnings };
 }
 
-async function buildMonsterTokenItems({ moduleId, encounter, origin, importedItems }) {
-  const items = [];
-  let skipped = 0;
-  let imported = 0;
+async function resolveMonsterGroups(encounter) {
   const groups = monsterTypeGroups(encounter);
-  const labelBases = labelBaseForBlocks(groups, (group) => monsterName(group.block));
-  const gridDpi = await sceneGridDpi();
-  const baseGap = gridDpi * 1.25;
+  await Promise.all(
+    groups.map(async (group) => {
+      const identity = monsterIdentity(group.block);
+      const query = identity.candidateName || monsterRawTitle(group.block);
+      const looked = await lookupCreatureName({
+        query,
+        ruleset: encounterRuleset(encounter, group.block),
+        variant: identity.variant,
+      });
+      const displayName = looked?.name || identity.name || "Monster";
+      group.block.resolvedName = displayName;
+      if (looked?.statBlock) group.block.resolvedStatBlock = looked.statBlock;
+      if (looked?.level != null) group.block.level = looked.level;
+      if (looked?.source) group.block.source = looked.source;
+      if (looked?.size) group.block.size = looked.size;
+      if (looked?.sourceUrl) group.block.sourceUrl = looked.sourceUrl;
+      group.displayName = displayName;
+      group.variant = identity.variant ?? "normal";
+      group.block.resolvedVariant = group.variant;
+    })
+  );
+  return groups;
+}
+
+
+async function pushStatCardItem({ items, moduleId, encounter, block, name, count, variant, sourceId, position, gridDpi }) {
+  const content = statCardContent(block, { name, count, variant });
+  const file = await rasterizeStatCardPng(content);
+  const url = await publishTokenPng(file);
+  const dpi = gridDpi * 2;
+  items.push(
+    buildImage(
+      { width: STAT_CARD_WIDTH * 2, height: STAT_CARD_HEIGHT * 2, url, mime: "image/png" },
+      { dpi, offset: { x: STAT_CARD_WIDTH, y: STAT_CARD_HEIGHT } }
+    )
+      .name(`${name} Stat Card`)
+      .description(`AMBA monster stat block for ${name}`)
+      .plainText("")
+      .textFillOpacity(0)
+      .layer("NOTE")
+      .position(position)
+      .metadata(
+        encounterItemMetadata({
+          moduleId,
+          encounterId: encounterId(encounter),
+          kind: "monster-stat-card",
+          sourceId,
+          monsterId: monsterId(block) ?? "",
+        })
+      )
+      .build()
+  );
+}
+
+async function buildMonsterStagingItems({
+  moduleId,
+  encounter,
+  origin,
+  importedItems,
+  importTokens,
+  importStatCards,
+}) {
+  const items = [];
+  const itemBatches = [];
+  const idsToReplace = [];
+  const tokenMoves = [];
+  let tokenSkipped = 0;
+  let tokenImported = 0;
+  let cardsImported = 0;
+  const groups = await resolveMonsterGroups(encounter);
+  const labelBases = labelBaseForBlocks(groups, (group) => group.displayName);
+  const gridDpi = Math.min(Math.max(await sceneGridDpi(), 80), 180);
+  const tokenGap = gridDpi * 0.25;
+  let cursorY = origin.y;
 
   for (const [groupIndex, group] of groups.entries()) {
+    const groupItems = [];
     const block = group.block;
     const color = TOKEN_COLORS[groupIndex % TOKEN_COLORS.length];
-    const name = monsterName(block);
+    const name = group.displayName;
     const labelBase = labelBases[groupIndex];
-    const footprintSize = Math.round(gridDpi * pf2eSpaceMultiplier(monsterSize(block)));
-    const tokenSize = Math.round(footprintSize * 0.72);
-    const labelWidth = Math.max(tokenSize * 0.62, tokenSize - gridDpi * 0.3);
-    const labelHeight = Math.max(tokenSize * 0.4, tokenSize * 0.5);
+    const cells = pf2eSpaceMultiplier(monsterSize(block));
+    const tokenSpan = Math.round(gridDpi * cells);
+    const hasCard = importStatCards && Boolean(monsterStatBlock(block));
+    const cardCenterX = origin.x + STAT_CARD_WIDTH / 2;
+    const tokenRowWidth = group.count * tokenSpan + Math.max(0, group.count - 1) * tokenGap;
+    const tokenRowStartX = (hasCard ? cardCenterX : origin.x + tokenRowWidth / 2) - tokenRowWidth / 2;
+    const tokenCenterY = cursorY + tokenSpan / 2;
+    const cardCenterY = cursorY + (importTokens ? tokenSpan + tokenGap : 0) + STAT_CARD_HEIGHT / 2;
 
-    for (let copy = 0; copy < group.count; copy += 1) {
-      const label = numberedLabel(labelBase, copy);
-      const sourceId = group.sourceId;
-      const tokenInstanceId = `${safeName(sourceId, "monster")}-${copy + 1}`;
-      if (findImportedItem(importedItems, { kind: "monster-token", tokenInstanceId })) {
-        skipped += 1;
-        continue;
+    if (importTokens) {
+      for (let copy = 0; copy < group.count; copy += 1) {
+        const label = numberedLabel(labelBase, copy, group.count);
+        const sourceId = group.sourceId;
+        const tokenInstanceId = `${safeName(sourceId, "monster")}-${copy + 1}`;
+        const position = {
+          x: tokenRowStartX + copy * (tokenSpan + tokenGap) + tokenSpan / 2,
+          y: tokenCenterY,
+        };
+        const existingToken = findImportedItem(importedItems, { kind: "monster-token", tokenInstanceId });
+        if (existingToken?.id) {
+          tokenMoves.push({ id: existingToken.id, position });
+          tokenSkipped += 1;
+          continue;
+        }
+        const metadata = encounterItemMetadata({
+          moduleId,
+          encounterId: encounterId(encounter),
+          kind: "monster-token",
+          sourceId,
+          monsterId: monsterId(block) ?? "",
+          tokenInstanceId,
+        });
+        const tokenImage = await monsterTokenImage(label, name, color, cells);
+        groupItems.push(
+          buildImage(tokenImage.image, tokenImage.grid)
+            .name(`${label} ${name}`)
+            .description(`AMBA monster token for ${name}`)
+            .plainText("")
+            .textFillOpacity(0)
+            .textStrokeOpacity(0)
+            .layer("CHARACTER")
+            .position(position)
+            .metadata(metadata)
+            .build()
+        );
+        tokenImported += 1;
       }
+    }
 
-      const position = gridPosition(items.length, {
-        startX: origin.x + footprintSize / 2,
-        startY: origin.y + footprintSize / 2,
-        columns: 8,
-        gapX: Math.max(baseGap, footprintSize + gridDpi * 0.25),
-        gapY: Math.max(baseGap, footprintSize + gridDpi * 0.25),
-      });
-      const tokenCenter = {
-        x: position.x + tokenSize / 2,
-        y: position.y + tokenSize / 2,
-      };
-      const baseTextWidth = labelWidth * 0.82;
-      const baseTextHeight = labelHeight;
-      const numberTextWidth = labelWidth * 0.36;
-      const numberTextHeight = labelHeight * 0.55;
-      const tokenId = `amba-token-${safeName(tokenInstanceId, "monster")}-${crypto.randomUUID()}`;
-      const baseTextId = `${tokenId}-label-base`;
-      const numberTextId = `${tokenId}-label-number`;
-      const metadata = encounterItemMetadata({
+    if (hasCard) {
+      const existingCard = findImportedItem(importedItems, { kind: "monster-stat-card", sourceId: group.sourceId });
+      const existingText = findImportedItem(importedItems, { kind: "monster-stat-card-text", sourceId: group.sourceId });
+      if (existingCard?.id) idsToReplace.push(existingCard.id);
+      if (existingText?.id) idsToReplace.push(existingText.id);
+      await pushStatCardItem({
+        items: groupItems,
         moduleId,
-        encounterId: encounterId(encounter),
-        kind: "monster-token",
-        sourceId,
-        monsterId: monsterId(block) ?? "",
-        tokenInstanceId,
+        encounter,
+        block,
+        name,
+        count: group.count,
+        variant: group.variant,
+        sourceId: group.sourceId,
+        position: { x: cardCenterX, y: cardCenterY },
+        gridDpi,
       });
+      cardsImported += 1;
+    }
 
-      items.push(
-        buildShape()
-          .id(tokenId)
-          .name(`${label} ${name}`)
-          .description(`AMBA monster token for ${name}`)
-          .shapeType("CIRCLE")
-          .width(tokenSize)
-          .height(tokenSize)
-          .fillColor(color)
-          .fillOpacity(1)
-          .strokeColor("#f5f3ff")
-          .strokeOpacity(1)
-          .strokeWidth(Math.max(3, Math.round(gridDpi * 0.04)))
-          .layer("CHARACTER")
-          .position(position)
-          .zIndex(0)
-          .disableAutoZIndex(true)
-          .metadata({
-            ...metadata,
-            [`${NS}/groupId`]: tokenId,
-            [`${NS}/groupRole`]: "background",
-          })
-          .build(),
-        buildText()
-          .id(baseTextId)
-          .name(`${label} ${name} Label Base`)
-          .description(`AMBA monster token base label for ${name}`)
-          .richText(tokenLabelText(labelBase))
-          .width(labelWidth * 0.82)
-          .height(labelHeight)
-          .padding(0)
-          .fontSize(tokenBaseFontSize(labelBase, tokenSize))
-          .fontWeight(700)
-          .fillColor("#ffffff")
-          .strokeColor("#1f160f")
-          .strokeOpacity(1)
-          .strokeWidth(6)
-          .textAlign("CENTER")
-          .textAlignVertical("MIDDLE")
-          .layer("CHARACTER")
-          .position(centeredBoxPosition(tokenCenter, baseTextWidth, baseTextHeight, { x: -tokenSize * 0.04, y: tokenSize * 0.04 }))
-          .zIndex(10)
-          .attachedTo(tokenId)
-          .disableHit(true)
-          .disableAutoZIndex(true)
-          .metadata({
-            ...metadata,
-            [`${NS}/kind`]: "monster-token-label",
-            [`${NS}/groupId`]: tokenId,
-            [`${NS}/groupRole`]: "label-base",
-          })
-          .build(),
-        buildText()
-          .id(numberTextId)
-          .name(`${label} ${name} Label Number`)
-          .description(`AMBA monster token number label for ${name}`)
-          .richText(tokenLabelText(String(copy + 1)))
-          .width(numberTextWidth)
-          .height(numberTextHeight)
-          .padding(0)
-          .fontSize(tokenSubscriptFontSize(tokenSize))
-          .fontWeight(700)
-          .fillColor("#ffffff")
-          .strokeColor("#1f160f")
-          .strokeOpacity(1)
-          .strokeWidth(4)
-          .textAlign("CENTER")
-          .textAlignVertical("MIDDLE")
-          .layer("CHARACTER")
-          .position(centeredBoxPosition(tokenCenter, numberTextWidth, numberTextHeight, { x: tokenSize * 0.18, y: tokenSize * 0.18 }))
-          .zIndex(11)
-          .attachedTo(tokenId)
-          .disableHit(true)
-          .disableAutoZIndex(true)
-          .metadata({
-            ...metadata,
-            [`${NS}/kind`]: "monster-token-label",
-            [`${NS}/groupId`]: tokenId,
-            [`${NS}/groupRole`]: "label-number",
-          })
-          .build()
-      );
-      imported += 1;
+    if (hasCard) {
+      cursorY = cardCenterY + STAT_CARD_HEIGHT / 2 + 60;
+    } else if (importTokens) {
+      cursorY = tokenCenterY + tokenSpan / 2 + gridDpi * 0.75;
+    }
+
+    if (groupItems.length) {
+      items.push(...groupItems);
+      itemBatches.push(groupItems);
     }
   }
 
-  return { items, skipped, imported };
-}
-
-function buildMonsterStatCardItems({ moduleId, encounter, origin, importedItems }) {
-  const items = [];
-  let imported = 0;
-  const groups = monsterTypeGroups(encounter);
-
-  for (const [index, group] of groups.entries()) {
-    const block = group.block;
-    const text = monsterStatBlock(block);
-    if (!text) continue;
-
-    const sourceId = group.sourceId;
-    if (findImportedItem(importedItems, { kind: "monster-stat-card", sourceId })) continue;
-
-    const position = gridPosition(index, {
-      startX: origin.x + 1300,
-      startY: origin.y + 260,
-      columns: 1,
-      gapX: 1100,
-      gapY: 820,
-    });
-    const cardId = `amba-stat-card-${safeName(sourceId, "monster")}-${crypto.randomUUID()}`;
-    const textId = `${cardId}-text`;
-    const metadata = encounterItemMetadata({
-      moduleId,
-      encounterId: encounterId(encounter),
-      kind: "monster-stat-card",
-      sourceId,
-      monsterId: monsterId(block) ?? "",
-    });
-
-    items.push(
-      buildShape()
-        .id(cardId)
-        .name(`${monsterName(block)} Stat Card`)
-        .description(`AMBA monster stat block for ${monsterName(block)}`)
-        .shapeType("RECTANGLE")
-        .width(1040)
-        .height(760)
-        .fillColor("#f7f2e8")
-        .fillOpacity(1)
-        .strokeColor("#4a4036")
-        .strokeOpacity(1)
-        .strokeWidth(6)
-        .layer("NOTE")
-        .position(position)
-        .locked(true)
-        .zIndex(0)
-        .disableAutoZIndex(true)
-        .metadata({ ...metadata, [`${NS}/groupId`]: cardId, [`${NS}/groupRole`]: "background" })
-        .build(),
-      buildText()
-        .id(textId)
-        .name(`${monsterName(block)} Stat Text`)
-        .description(`AMBA monster stat text for ${monsterName(block)}`)
-        .richText(statBlockRichText(block))
-        .width(940)
-        .height(660)
-        .padding(0)
-        .fontFamily("Consolas")
-        .fontSize(17)
-        .lineHeight(1.18)
-        .fillColor("#251f1a")
-        .textAlignVertical("TOP")
-        .layer("NOTE")
-        .position(position)
-        .locked(true)
-        .disableHit(true)
-        .zIndex(10)
-        .attachedTo(cardId)
-        .disableAutoZIndex(true)
-        .metadata({
-          ...metadata,
-          [`${NS}/kind`]: "monster-stat-card-text",
-          [`${NS}/groupId`]: cardId,
-          [`${NS}/groupRole`]: "text",
-        })
-        .build()
-    );
-    imported += 1;
-  }
-
-  return { items, imported };
+  return { items, itemBatches, idsToReplace, tokenMoves, tokenSkipped, tokenImported, cardsImported };
 }
 
 export async function addEncounterToCurrentScene({ moduleId, encounter, options = {} }) {
+  await requireOpenScene();
   const importOptions = {
     importMap: true,
     importMonsterTokens: true,
@@ -542,45 +522,52 @@ export async function addEncounterToCurrentScene({ moduleId, encounter, options 
   const items = [];
   const id = encounterId(encounter);
   const importedItems = await getImportedEncounterItems(moduleId, id);
-  const occupiedBounds = await getSceneBoundsForLayers(["MAP", "CHARACTER"]);
+  await unlockAmbaStatCardsInCurrentScene();
+  const mapLayerBounds = await getSceneBoundsForLayers(["MAP"]);
+  if (importOptions.importMap) {
+    await applySceneGridFromAmba(encounterMapGrid(encounter));
+  }
   const map = importOptions.importMap
-    ? await buildMapItem({ moduleId, encounter, occupiedBounds, importedItems })
+    ? await buildMapItem({
+        moduleId,
+        encounter,
+        occupiedBounds: await getSceneBoundsForLayers(["MAP", "CHARACTER"]),
+        importedItems,
+      })
     : null;
   if (map?.item) items.push(map.item);
 
-  const stagingBounds = combineBounds(occupiedBounds, map?.bounds);
-  const monsterOrigin = belowBounds(stagingBounds, 600);
-  const monsterResult = importOptions.importMonsterTokens
-    ? await buildMonsterTokenItems({
-        moduleId,
-        encounter,
-        origin: monsterOrigin,
-        importedItems,
-      })
-    : { items: [], skipped: 0, imported: 0 };
+  const monsterOrigin = belowBounds(combineBounds(mapLayerBounds, map?.bounds), 400);
+  const monsterResult =
+    importOptions.importMonsterTokens || importOptions.importStatCards
+      ? await buildMonsterStagingItems({
+          moduleId,
+          encounter,
+          origin: monsterOrigin,
+          importedItems,
+          importTokens: importOptions.importMonsterTokens,
+          importStatCards: importOptions.importStatCards,
+        })
+      : { items: [], itemBatches: [], idsToReplace: [], tokenMoves: [], tokenSkipped: 0, tokenImported: 0, cardsImported: 0 };
   items.push(...monsterResult.items);
-
-  const statCardResult = importOptions.importStatCards
-    ? buildMonsterStatCardItems({
-        moduleId,
-        encounter,
-        origin: monsterOrigin,
-        importedItems,
-      })
-    : { items: [], imported: 0 };
-  items.push(...statCardResult.items);
 
   if (!items.length && !importedItems.length) {
     throw new Error("This encounter did not include a map or monster tokens AMBA can export yet.");
   }
 
-  if (items.length) await addItemsToCurrentScene(items);
+  await deleteItemsFromCurrentScene(monsterResult.idsToReplace);
+  await moveItemsInCurrentScene(monsterResult.tokenMoves);
+  if (map?.item) await addItemsToCurrentScene([map.item]);
+  for (const batch of monsterResult.itemBatches ?? []) {
+    if (batch.length) await addItemsToCurrentScene(batch);
+  }
   await saveEncounterSceneMetadata({ moduleId, encounterId: id, title: encounterTitle(encounter) });
   return {
     mapImported: Boolean(map?.item),
     mapSkipped: Boolean(map?.skipped),
-    monsterTokensImported: monsterResult.imported,
-    monsterTokensSkipped: monsterResult.skipped,
-    statCardsImported: statCardResult.imported,
+    mapWarnings: map?.warnings ?? [],
+    monsterTokensImported: monsterResult.tokenImported,
+    monsterTokensSkipped: monsterResult.tokenSkipped,
+    statCardsImported: monsterResult.cardsImported,
   };
 }

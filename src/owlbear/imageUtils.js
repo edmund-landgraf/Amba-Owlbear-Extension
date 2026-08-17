@@ -1,5 +1,7 @@
 // Shared image helpers for Owlbear item and asset construction.
 import { authFetchOptionsForUrl } from "../amba/ambaApi.js";
+import { publishTokenPng } from "./tokenHost.js";
+import { svgFileWithEmbeddedTokenFont } from "./tokenSvg.js";
 
 export function safeName(value, fallback = "asset") {
   return String(value ?? fallback)
@@ -30,22 +32,44 @@ export async function imageSizeFromBlob(blob, name) {
   }
 }
 
-export async function imageInfoFromUrl(url, filename, fallbackType = "image/png", dpi) {
-  const file = await fetchImageBlob(url, filename);
-  const size = await imageSizeFromBlob(file, filename);
-  const objectUrl = URL.createObjectURL(file);
+export async function sceneImageFromFile(file, { width, height, dpi, mime } = {}) {
+  const size =
+    Number.isFinite(width) && Number.isFinite(height)
+      ? { width, height }
+      : await imageSizeFromBlob(file, file.name);
+  const url = await publishTokenPng(file);
   const gridDpi = dpi ?? Math.max(size.width, size.height);
   return {
     file,
-    image: { ...size, url: objectUrl, mime: file.type || fallbackType },
+    image: { ...size, url, mime: mime || file.type || "image/png" },
     grid: { dpi: gridDpi, offset: { x: size.width / 2, y: size.height / 2 } },
   };
 }
 
-export function rasterizeSvgFile(svgFile, filename, width, height) {
+export async function imageInfoFromUrl(url, filename, fallbackType = "image/png", dpi) {
+  let file = await fetchImageBlob(url, filename);
+  if (/svg/i.test(file.type) || /\.svg($|\?)/i.test(String(url))) {
+    const pngName = String(filename).replace(/\.svg$/i, "").replace(/\.png$/i, "") + ".png";
+    file = await rasterizeSvgFile(file, pngName, 512, 512);
+  }
+  return sceneImageFromFile(file, { dpi, mime: file.type || fallbackType });
+}
+
+export function dataUrlFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error(`Unable to encode ${file.name || "image"}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function rasterizeSvgFile(svgFile, filename, width, height) {
+  const file = await svgFileWithEmbeddedTokenFont(svgFile);
+  const svgText = await file.text();
   return new Promise((resolve, reject) => {
     const image = new Image();
-    const objectUrl = URL.createObjectURL(svgFile);
+    const objectUrl = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml;charset=utf-8" }));
 
     image.onload = () => {
       try {

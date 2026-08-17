@@ -1,3 +1,5 @@
+const SKIP_WORDS = new Set(["the", "of", "a", "an", "elite", "weak"]);
+
 function words(value) {
   return String(value ?? "")
     .replace(/[^a-z0-9 ]+/gi, " ")
@@ -6,42 +8,65 @@ function words(value) {
     .filter(Boolean);
 }
 
-function baseInitial(name) {
-  return (words(name)[0]?.[0] ?? "M").toUpperCase();
+function significantWords(name) {
+  return words(name).filter((word) => !SKIP_WORDS.has(word.toLocaleLowerCase()));
 }
 
-function twoLetterBase(initial, used) {
-  let suffix = "a".charCodeAt(0);
-  while (suffix <= "z".charCodeAt(0)) {
-    const candidate = `${initial}${String.fromCharCode(suffix)}`;
+export function labelBaseFromName(name) {
+  const parts = significantWords(name);
+  if (!parts.length) return "M";
+  return parts.map((word) => word[0].toUpperCase()).join("");
+}
+
+function disambiguatedBase(name, base, used) {
+  const parts = significantWords(name);
+  const last = parts[parts.length - 1] ?? "";
+  let candidate = base;
+  for (let index = 1; index < last.length; index += 1) {
+    candidate = `${base}${last.slice(1, index + 1)}`;
     if (!used.has(candidate)) return candidate;
-    suffix += 1;
   }
 
-  return `${initial}x`;
+  let suffix = 2;
+  candidate = `${base}${suffix}`;
+  while (used.has(candidate)) {
+    suffix += 1;
+    candidate = `${base}${suffix}`;
+  }
+  return candidate;
 }
 
 export function labelBaseForBlocks(blocks, getName) {
-  const byInitial = new Map();
-  for (const block of blocks) {
-    const initial = baseInitial(getName(block));
-    byInitial.set(initial, (byInitial.get(initial) ?? 0) + 1);
-  }
+  const bases = blocks.map((block) => labelBaseFromName(getName(block)));
+  const counts = new Map();
+  for (const base of bases) counts.set(base, (counts.get(base) ?? 0) + 1);
 
-  const usedTwoLetterBases = new Set();
-  return blocks.map((block) => {
-    const name = getName(block);
-    const initial = baseInitial(name);
-    if ((byInitial.get(initial) ?? 0) === 1) return initial;
+  const used = new Set();
+  return blocks.map((block, index) => {
+    const base = bases[index];
+    if ((counts.get(base) ?? 0) === 1 && !used.has(base)) {
+      used.add(base);
+      return base;
+    }
 
-    const base = twoLetterBase(initial, usedTwoLetterBases);
-    usedTwoLetterBases.add(base);
-    return base;
+    const next = used.has(base) ? disambiguatedBase(getName(block), base, used) : base;
+    used.add(next);
+    return next;
   });
 }
 
-export function numberedLabel(base, index) {
-  return `${base}${index + 1}`;
+const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
+
+function subscriptNumber(value) {
+  return String(value)
+    .split("")
+    .map((digit) => SUBSCRIPT_DIGITS[digit] ?? digit)
+    .join("");
+}
+
+export function numberedLabel(base, index, count = 2) {
+  if (count <= 1) return base;
+  return `${base}${subscriptNumber(index + 1)}`;
 }
 
 export function labelFontSize(label) {

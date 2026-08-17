@@ -8,7 +8,7 @@ import {
   snapshotInfo,
   tokenInfo,
 } from "./pcAssets.js";
-import { getSceneBoundsForLayers, gridPosition, NS, rightOfBounds } from "./layout.js";
+import { NS } from "./layout.js";
 import { addItemsToCurrentScene } from "./sceneItems.js";
 
 // Normalize thrown values from Owlbear/browser APIs into readable messages.
@@ -93,15 +93,13 @@ function placeholderRichText(pc) {
 
 // Current primary item builder for "Load all PCs".
 //
-// For each PC it creates:
-// - a token image item on the CHARACTER layer,
-// - a colored rectangle Shape on the NOTE layer,
-// - a Text item on top of that rectangle.
+// For each PC it currently creates only a token image item on the CHARACTER
+// layer. The companion note Shape + Text path is kept below, commented out.
 //
-// Shape + Text is deliberate. A previous image-note/text-overlay approach looked
-// close visually, but Owlbear treated edited text as if the box was too narrow,
-// causing vertical letters. A standalone Text item with explicit width behaves
-// much more predictably.
+// Shape + Text was deliberate. A previous image-note/text-overlay approach
+// looked close visually, but Owlbear treated edited text as if the box was too
+// narrow, causing vertical letters. A standalone Text item with explicit width
+// behaves much more predictably.
 async function buildPcTokenAndNoteItems({ moduleId, pc, index = 0 }) {
   let token;
 
@@ -116,13 +114,10 @@ async function buildPcTokenAndNoteItems({ moduleId, pc, index = 0 }) {
 
   // All items in the token+note group share metadata so they can be found or
   // cleaned up together later.
-  const metadata = { [`${NS}/moduleId`]: moduleId, [`${NS}/pcId`]: pc.id };
+  const metadata = { [`${NS}/moduleId`]: moduleId, [`${NS}/pcId`]: pc.id, [`${NS}/color`]: color };
 
-  // Simple 3-column scene-root layout for fast visual testing.
-  const row = Math.floor(index / 3);
-  const column = index % 3;
-  const originX = 200 + column * 1100;
-  const originY = 200 + row * 700;
+  // One horizontal roster row: token on top, sheet in the same column below.
+  const origin = pcRosterTokenPosition(index);
 
   // Token item. The URL is the short AMBA token.svg URL, not embedded base64.
   const tokenItem = buildImage(token.image, token.grid)
@@ -130,48 +125,48 @@ async function buildPcTokenAndNoteItems({ moduleId, pc, index = 0 }) {
     .description(`AMBA generated token for ${pc.name}`)
     .plainText(pc.name)
     .layer("CHARACTER")
-    .position({ x: originX, y: originY })
+    .position({ x: origin.x, y: origin.y })
     .metadata({ ...metadata, [`${NS}/kind`]: "pc-token" })
     .build();
 
   // Note background as a real Owlbear shape, not an image pretending to be a
   // note. This makes selection and editing more predictable.
-  const noteShape = buildShape()
-    .name(`${pc.name} Note`)
-    .description(`AMBA note for ${pc.name}`)
-    .shapeType("RECTANGLE")
-    .width(420)
-    .height(260)
-    .fillColor(color)
-    .fillOpacity(1)
-    .strokeColor("#f5f3ff")
-    .strokeOpacity(1)
-    .strokeWidth(8)
-    .layer("NOTE")
-    .position({ x: originX + 470, y: originY })
-    .metadata({ ...metadata, [`${NS}/kind`]: "pc-placeholder-note" })
-    .build();
+  // const noteShape = buildShape()
+  //   .name(`${pc.name} Note`)
+  //   .description(`AMBA note for ${pc.name}`)
+  //   .shapeType("RECTANGLE")
+  //   .width(420)
+  //   .height(260)
+  //   .fillColor(color)
+  //   .fillOpacity(1)
+  //   .strokeColor("#f5f3ff")
+  //   .strokeOpacity(1)
+  //   .strokeWidth(8)
+  //   .layer("NOTE")
+  //   .position({ x: origin.x + 470, y: origin.y })
+  //   .metadata({ ...metadata, [`${NS}/kind`]: "pc-placeholder-note" })
+  //   .build();
 
   // Editable note text on top of the colored shape.
   // Width is explicit to prevent the vertical-letter wrapping seen in testing.
-  const noteText = buildText()
-    .name(`${pc.name} Note Text`)
-    .description(`AMBA note text for ${pc.name}`)
-    .richText(placeholderRichText(pc))
-    .width(340)
-    .height("AUTO")
-    .padding(0)
-    .fontSize(28)
-    .fillColor("#ffffff")
-    .textAlign("CENTER")
-    .textAlignVertical("MIDDLE")
-    .layer("NOTE")
-    .position({ x: originX + 470, y: originY })
-    .zIndex(1)
-    .metadata({ ...metadata, [`${NS}/kind`]: "pc-placeholder-note-text" })
-    .build();
+  // const noteText = buildText()
+  //   .name(`${pc.name} Note Text`)
+  //   .description(`AMBA note text for ${pc.name}`)
+  //   .richText(placeholderRichText(pc))
+  //   .width(340)
+  //   .height("AUTO")
+  //   .padding(0)
+  //   .fontSize(28)
+  //   .fillColor("#ffffff")
+  //   .textAlign("CENTER")
+  //   .textAlignVertical("MIDDLE")
+  //   .layer("NOTE")
+  //   .position({ x: origin.x + 470, y: origin.y })
+  //   .zIndex(1)
+  //   .metadata({ ...metadata, [`${NS}/kind`]: "pc-placeholder-note-text" })
+  //   .build();
 
-  return [tokenItem, noteShape, noteText];
+  return [tokenItem];
 }
 
 // Upload a single-PC scene to Owlbear's Scenes library.
@@ -249,7 +244,7 @@ export async function addPcsToCurrentScene({ moduleId, pcs }) {
 
 // Main root-scene import used by the "Load all PCs" button.
 // This avoids sheets entirely, so incomplete PC data can still be visualized as
-// token+placeholder-note pairs.
+// tokens. Companion notes remain implemented but commented out.
 export async function addPcTokensAndNotesToCurrentScene({ moduleId, pcs }) {
   if (!pcs.length) throw new Error("No PCs found to import.");
 
@@ -260,19 +255,70 @@ export async function addPcTokensAndNotesToCurrentScene({ moduleId, pcs }) {
   return built.length;
 }
 
+const PC_ROSTER_START = { x: 200, y: 200 };
+const PC_ROSTER_GAP_X = 1200;
+const PC_TOKEN_SIZE = 512;
+const PC_SHEET_GAP_Y = 80;
+
+function pcRosterTokenPosition(index) {
+  return {
+    x: PC_ROSTER_START.x + index * PC_ROSTER_GAP_X,
+    y: PC_ROSTER_START.y,
+  };
+}
+
+function sheetPositionInColumn(tokenCenter, snapshot) {
+  const tokenBottom = tokenCenter.y + PC_TOKEN_SIZE / 2;
+  return {
+    x: tokenCenter.x,
+    y: tokenBottom + PC_SHEET_GAP_Y + snapshot.image.height / 2,
+  };
+}
+
+async function sheetPositionForToken(token, snapshot, index) {
+  if (token) {
+    try {
+      const bounds = await OBR.scene.items.getItemBounds([token.id]);
+      return {
+        x: (bounds.min.x + bounds.max.x) / 2,
+        y: bounds.max.y + PC_SHEET_GAP_Y + snapshot.image.height / 2,
+      };
+    } catch {
+      return sheetPositionInColumn(token.position, snapshot);
+    }
+  }
+
+  return sheetPositionInColumn(pcRosterTokenPosition(index), snapshot);
+}
+
+function pcRosterColor(index) {
+  return NOTE_COLORS[index % NOTE_COLORS.length];
+}
+
+function colorFromToken(token, index) {
+  return token?.metadata?.[`${NS}/color`] || pcRosterColor(index);
+}
+
+function pcIdFromItem(item) {
+  return item.metadata?.[`${NS}/pcId`];
+}
+
+async function existingPcTokensById(moduleId) {
+  const tokens = await OBR.scene.items.getItems(
+    (item) =>
+      item.layer === "CHARACTER" &&
+      item.metadata?.[`${NS}/kind`] === "pc-token" &&
+      item.metadata?.[`${NS}/moduleId`] === moduleId
+  );
+  return new Map(tokens.map((token) => [pcIdFromItem(token), token]));
+}
+
 // Build one rendered character-sheet PNG item.
-// These snapshots are placed below the token/note prototype area so they do not
-// overlap the root token layout.
-async function buildPcSheetImageItem({ moduleId, pc, index = 0, origin = { x: 3600, y: 200 } }) {
-  const snapshot = await snapshotInfo(moduleId, pc);
+// Place it in the same column as that PC's token, immediately below the token.
+async function buildPcSheetImageItem({ moduleId, pc, index = 0, token }) {
+  const snapshot = await snapshotInfo(moduleId, pc, colorFromToken(token, index));
   const metadata = { [`${NS}/moduleId`]: moduleId, [`${NS}/pcId`]: pc.id };
-  const position = gridPosition(index, {
-    startX: origin.x,
-    startY: origin.y,
-    columns: 2,
-    gapX: 1100,
-    gapY: 1500,
-  });
+  const position = await sheetPositionForToken(token, snapshot, index);
   return buildImage(snapshot.image, snapshot.grid)
     .name(`${pc.name} Character Sheet`)
     .description(`Rendered AMBA character sheet for ${pc.name}`)
@@ -288,11 +334,16 @@ async function buildPcSheetImageItem({ moduleId, pc, index = 0, origin = { x: 36
 export async function addPcSheetImagesToCurrentScene({ moduleId, pcs }) {
   if (!pcs.length) throw new Error("No PCs found to import.");
 
-  const mapBounds = await getSceneBoundsForLayers(["MAP"]);
-  const origin = rightOfBounds(mapBounds, 1000);
-
+  const tokensByPcId = await existingPcTokensById(moduleId);
   const results = await Promise.allSettled(
-    pcs.map((pc, index) => buildPcSheetImageItem({ moduleId, pc, index, origin }))
+    pcs.map((pc, index) =>
+      buildPcSheetImageItem({
+        moduleId,
+        pc,
+        index,
+        token: tokensByPcId.get(pc.id),
+      })
+    )
   );
   const items = results
     .filter((result) => result.status === "fulfilled")

@@ -1,6 +1,5 @@
 import { getModules, getPcs } from "./ambaApi.js";
 import { wireEncounterControls } from "./encounterControls.js";
-import { wireExportQueueControls } from "./exportQueueControls.js";
 import { errorMessage, renderPcButtons } from "./uiHelpers.js";
 import { addPcSheetImagesToCurrentScene, addPcTokensAndNotesToCurrentScene } from "../owlbear/pcImporter.js";
 
@@ -19,8 +18,6 @@ export async function wirePcLoader() {
   const scenePicker = document.getElementById("scenePicker");
   const encounterPicker = document.getElementById("encounterPicker");
   const importEncounter = document.getElementById("importEncounter");
-  const importQueuedExports = document.getElementById("importQueuedExports");
-  const clearAndImportQueuedExports = document.getElementById("clearAndImportQueuedExports");
   const saveEncounterPlacements = document.getElementById("saveEncounterPlacements");
   const optionImportMap = document.getElementById("optionImportMap");
   const optionImportMonsterTokens = document.getElementById("optionImportMonsterTokens");
@@ -41,18 +38,6 @@ export async function wirePcLoader() {
     encounterPicker,
     importEncounter,
     saveEncounterPlacements,
-    optionImportMap,
-    optionImportMonsterTokens,
-    optionImportStatCards,
-    optionIncludePcTokens,
-    encounterStatus,
-    encounterDiagnostics,
-  });
-  wireExportQueueControls({
-    importQueuedExports,
-    clearAndImportQueuedExports,
-    modulePicker,
-    encounterPicker,
     optionImportMap,
     optionImportMonsterTokens,
     optionImportStatCards,
@@ -85,9 +70,9 @@ export async function wirePcLoader() {
 
       // The importer handles Owlbear scene readiness, item construction, and
       // the color rotation. This UI layer only reports progress.
-      importStatus.textContent = `Dropping ${pcs.length} PC tokens and notes at scene root...`;
+      importStatus.textContent = `Dropping ${pcs.length} PC tokens at scene root...`;
       const count = await addPcTokensAndNotesToCurrentScene({ moduleId, pcs });
-      importStatus.textContent = `${count} PC tokens and notes were added to the current scene.`;
+      importStatus.textContent = `${count} PC tokens were added to the current scene.`;
     } catch (error) {
       // Show the meaningful message in the extension panel and mark it as an
       // error for styling.

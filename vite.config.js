@@ -1,4 +1,24 @@
+import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { defineConfig } from "vite";
+
+const tokenDir = join(process.cwd(), ".amba-generated-tokens");
+mkdirSync(tokenDir, { recursive: true });
+
+function corsHeaders(req, res) {
+  const origin = req.headers.origin;
+  const allowedOrigins = new Set(["https://www.owlbear.rodeo", "https://owlbear.rodeo"]);
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin, Access-Control-Request-Headers");
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] ?? "*");
+}
 
 export default defineConfig({
   plugins: [
@@ -6,38 +26,75 @@ export default defineConfig({
       name: "owlbear-local-private-network",
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
-          const origin = req.headers.origin;
-          const allowedOrigins = new Set([
-            "https://www.owlbear.rodeo",
-            "https://owlbear.rodeo",
-          ]);
-
-          if (origin && allowedOrigins.has(origin)) {
-            res.setHeader("Access-Control-Allow-Origin", origin);
-            res.setHeader("Vary", "Origin, Access-Control-Request-Headers");
+          corsHeaders(req, res);
+          if (req.method === "OPTIONS" && req.headers["access-control-request-private-network"]) {
+            res.statusCode = 204;
+            res.end();
+            return;
           }
-          res.setHeader("Access-Control-Allow-Private-Network", "true");
+          next();
+        });
+      },
+    },
+    {
+      name: "amba-generated-tokens",
+      configureServer(server) {
+        server.middlewares.use("/amba-generated-tokens", (req, res) => {
+          corsHeaders(req, res);
 
-          if (
-            req.method === "OPTIONS" &&
-            req.headers["access-control-request-private-network"]
-          ) {
-            res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS");
-            res.setHeader("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] ?? "*");
+          if (req.method === "OPTIONS") {
             res.statusCode = 204;
             res.end();
             return;
           }
 
-          next();
+          if (req.method === "POST") {
+            const chunks = [];
+            req.on("data", (chunk) => chunks.push(chunk));
+            req.on("end", () => {
+              const id = randomUUID();
+              writeFileSync(join(tokenDir, `${id}.png`), Buffer.concat(chunks));
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ id, url: `/amba-generated-tokens/${id}.png` }));
+            });
+            return;
+          }
+
+          if (req.method === "GET" || req.method === "HEAD") {
+            const id = String(req.url ?? "")
+              .replace(/^\//, "")
+              .replace(/\.png(?:\?.*)?$/, "");
+            const path = join(tokenDir, `${id}.png`);
+            try {
+              const file = readFileSync(path);
+              res.setHeader("Content-Type", "image/png");
+              res.setHeader("Cache-Control", "no-store");
+              res.statusCode = 200;
+              if (req.method === "HEAD") {
+                res.setHeader("Content-Length", String(file.length));
+                res.end();
+                return;
+              }
+              res.end(file);
+            } catch {
+              res.statusCode = 404;
+              res.end();
+            }
+            return;
+          }
+
+          res.statusCode = 405;
+          res.end();
         });
       },
     },
   ],
   server: {
     port: 5196,
+    allowedHosts: true,
     headers: {
       "Access-Control-Allow-Private-Network": "true",
+      "Access-Control-Allow-Origin": "*",
     },
     proxy: {
       "/api": {

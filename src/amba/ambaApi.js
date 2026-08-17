@@ -275,22 +275,6 @@ export function getEncounter(moduleId, encounterId) {
   });
 }
 
-// Queue consumed by the Owlbear extension. AMBA pushes into this queue when the
-// user right-clicks an encounter and chooses "Export to Owlbear".
-export function getOwlbearExportQueue() {
-  return getJson("/api/owlbear/export-queue");
-}
-
-export function completeOwlbearExport(queueItemId, result) {
-  return postJson(`/api/owlbear/export-queue/${encodeURIComponent(queueItemId)}/complete`, result);
-}
-
-export function failOwlbearExport(queueItemId, error) {
-  return postJson(`/api/owlbear/export-queue/${encodeURIComponent(queueItemId)}/fail`, {
-    error: error instanceof Error ? error.message : String(error),
-  });
-}
-
 export function saveOwlbearPlacements(moduleId, encounterId, payload) {
   return postJson(
     `/api/modules/${encodeURIComponent(moduleId)}/owlbear/encounters/${encodeURIComponent(encounterId)}/placements`,
