@@ -19,9 +19,9 @@ function gridSummary(grid, dpi) {
   if (Number.isFinite(size) && size > 0) parts.push(`${Math.round(size)}px/square`);
   if (Number.isFinite(columns) && Number.isFinite(rows)) parts.push(`${columns} x ${rows} squares`);
   if (scale) parts.push(`1 square = ${scale}`);
-  if (grid?.source === "inferred") parts.push("inferred from image");
+  if (grid?.source === "inferred") parts.push("measured from map grid lines");
   if (grid?.source === "metadata") parts.push("from AMBA metadata");
-  if (grid?.source === "fallback") parts.push("fallback one-square sizing");
+  if (grid?.source === "fallback") parts.push("AMBA sent no grid; 140px/square fallback");
   return parts.join(", ") || "Grid metadata not supplied";
 }
 

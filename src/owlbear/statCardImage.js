@@ -16,7 +16,36 @@ function wrapLine(context, text, maxWidth) {
   return lines;
 }
 
-export function rasterizeStatCardPng({ header, name, meta, rows, width = 1040, height = 760 }) {
+async function loadBitmap(file) {
+  if (!file) return null;
+  try {
+    return await createImageBitmap(file);
+  } catch {
+    return null;
+  }
+}
+
+function canvasFile(canvas, filename) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("Unable to render stat card"));
+        return;
+      }
+      resolve(new File([blob], filename, { type: "image/png" }));
+    }, "image/png");
+  });
+}
+
+export async function rasterizeStatCardPng({
+  header,
+  name,
+  meta,
+  rows,
+  tokenFile,
+  width = 1040,
+  height = 760,
+}) {
   const scale = 2;
   const canvas = document.createElement("canvas");
   canvas.width = width * scale;
@@ -31,9 +60,19 @@ export function rasterizeStatCardPng({ header, name, meta, rows, width = 1040, h
 
   const left = 40;
   const maxWidth = width - 80;
-  let y = 48;
+  let y = 28;
   context.fillStyle = "#251f1a";
   context.textBaseline = "top";
+
+  const tokenBitmap = await loadBitmap(tokenFile);
+  if (tokenBitmap) {
+    const tokenSize = 80;
+    context.drawImage(tokenBitmap, left, y, tokenSize, tokenSize);
+    tokenBitmap.close();
+    y += tokenSize + 12;
+  } else {
+    y = 48;
+  }
 
   context.font = "bold 22px Consolas, ui-monospace, monospace";
   context.fillText(header, left, y);
@@ -74,13 +113,5 @@ export function rasterizeStatCardPng({ header, name, meta, rows, width = 1040, h
     });
   }
 
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("Unable to render stat card"));
-        return;
-      }
-      resolve(new File([blob], "stat-card.png", { type: "image/png" }));
-    }, "image/png");
-  });
+  return canvasFile(canvas, "stat-card.png");
 }

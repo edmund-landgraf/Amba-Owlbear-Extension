@@ -91,7 +91,66 @@ function monsterBlockFromArtifact(artifact) {
   };
 }
 
+function firstDefined(...values) {
+  return values.find((value) => value != null && value !== "");
+}
+
+function looksLikeGrid(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return [
+    "cellSize",
+    "dpi",
+    "gridSize",
+    "pixelsPerSquare",
+    "squareSize",
+    "columns",
+    "cols",
+    "rows",
+    "squaresWide",
+    "squaresHigh",
+    "gridWidth",
+    "gridHeight",
+    "scale",
+    "gridScale",
+    "offset",
+    "gridOffset",
+  ].some((key) => value[key] != null);
+}
+
+function mergeEncounterMap(container) {
+  const metadata = container.metadata ?? {};
+  const mapArtifact = firstArtifactOfType(container, "map");
+  const mapPayload = mapArtifact?.payload ?? {};
+  const metadataMap = metadata.map ?? {};
+  const containerMap = container.map ?? container.battleMap ?? container.encounterMap ?? {};
+  const hasMap = mapArtifact || metadata.map || container.map || container.battleMap || container.encounterMap || metadata.mapUrl || container.mapUrl;
+  if (!hasMap) return undefined;
+
+  return {
+    id: firstDefined(containerMap.id, metadataMap.id, mapArtifact?.id, mapArtifact?.artifactId),
+    title: firstDefined(containerMap.title, metadataMap.title, mapArtifact?.title),
+    url: firstDefined(containerMap.url, metadataMap.url, mapPayload.url, container.mapUrl, metadata.mapUrl),
+    imageUrl: firstDefined(containerMap.imageUrl, metadataMap.imageUrl, mapPayload.imageUrl),
+    src: firstDefined(containerMap.src, metadataMap.src, mapPayload.src),
+    payload: Object.keys(mapPayload).length ? mapPayload : containerMap.payload ?? metadataMap.payload,
+    grid: [
+      containerMap.grid,
+      metadataMap.grid,
+      mapPayload.grid,
+      container.grid,
+      metadata.grid,
+      mapPayload,
+      containerMap,
+      metadataMap,
+    ].find(looksLikeGrid),
+    dpi: firstDefined(containerMap.dpi, metadataMap.dpi, mapPayload.dpi, container.mapDpi),
+    width: firstDefined(containerMap.width, metadataMap.width, mapPayload.width),
+    height: firstDefined(containerMap.height, metadataMap.height, mapPayload.height),
+  };
+}
+
 function normalizeEncounterContainer(container) {
+  if (!container || typeof container !== "object") return container;
   const metadata = container.metadata ?? {};
   const parent = container.parent;
   const parentType = parent?.containerType?.key ?? parent?.containerTypeKey ?? parent?.type;
@@ -101,24 +160,11 @@ function normalizeEncounterContainer(container) {
     container.sceneName ??
     container.sceneTitle ??
     (parentType === "scene" || parentType === "subscene" ? parent?.title : undefined);
-  const mapArtifact = firstArtifactOfType(container, "map");
-  const mapPayload = mapArtifact?.payload ?? {};
   const monsterArtifacts = artifactsOfType(container, "monster_block");
   return {
     ...container,
     sceneName,
-    map: metadata.map ??
-      container.map ??
-      (mapArtifact
-        ? {
-            id: mapArtifact.id,
-            title: mapArtifact.title,
-            url: mapPayload.url,
-            imageUrl: mapPayload.imageUrl,
-            payload: mapPayload,
-            grid: mapPayload.grid,
-          }
-        : undefined),
+    map: mergeEncounterMap(container),
     mapUrl: metadata.mapUrl ?? container.mapUrl,
     monsterBlocks:
       metadata.monsterBlocks ??
@@ -128,6 +174,14 @@ function normalizeEncounterContainer(container) {
       (monsterArtifacts.length ? monsterArtifacts.map(monsterBlockFromArtifact) : null) ??
       [],
   };
+}
+
+function normalizeEncounterList(payload) {
+  if (Array.isArray(payload)) return payload.map(normalizeEncounterContainer);
+  if (Array.isArray(payload?.encounters)) {
+    return { ...payload, encounters: payload.encounters.map(normalizeEncounterContainer) };
+  }
+  return payload;
 }
 
 async function postJson(path, body = {}) {
@@ -236,7 +290,9 @@ export function getPcs(moduleId) {
 // Fetch encounter summaries for the selected module. The extension keeps the
 // payload flexible because AMBA encounter data is still evolving.
 export function getEncounters(moduleId) {
-  return getJson(`/api/modules/${encodeURIComponent(moduleId)}/encounters`).catch(async (error) => {
+  return getJson(`/api/modules/${encodeURIComponent(moduleId)}/encounters`)
+    .then(normalizeEncounterList)
+    .catch(async (error) => {
     if (!isMissingEndpoint(error) && !isDevReadableFallback(error)) throw error;
 
     try {
@@ -259,7 +315,9 @@ export function getContainers(moduleId) {
 export function getEncounter(moduleId, encounterId) {
   return getJson(
     `/api/modules/${encodeURIComponent(moduleId)}/encounters/${encodeURIComponent(encounterId)}`
-  ).catch(async (error) => {
+  )
+    .then(normalizeEncounterContainer)
+    .catch(async (error) => {
     if (!isMissingEndpoint(error) && !isDevReadableFallback(error)) throw error;
 
     const container = await getJson(

@@ -8,7 +8,8 @@ import {
 import { firstLetterLabel, letterTokenSvg, letterTokenSvgUrl } from "./tokenSvg.js";
 import {
   fetchImageBlob,
-  imageInfoFromUrl,
+  mediumTokenFromFile,
+  overlayTokenOnImage,
   rasterizeSvgFile,
   safeName,
   sceneImageFromFile,
@@ -52,14 +53,13 @@ export async function tokenInfo(moduleId, pc, color = TOKEN_COLOR) {
   if (path) {
     const url = toAmbaUrl(path);
     try {
-      return await imageInfoFromUrl(url, `${safeName(pc.name)}-portrait`);
+      const file = await fetchImageBlob(url, `${safeName(pc.name)}-portrait`);
+      return await mediumTokenFromFile(file, `${safeName(pc.name)}-portrait.png`);
     } catch {
       // Fall through to a generated first-letter token if portrait metadata is stale.
     }
   }
 
-  // const url = getPcTokenImageUrl(moduleId, pc.id, color);
-  // return rasterizedTokenInfo(url, `${safeName(pc.name)}-token`);
   return rasterizedTokenInfo(
     letterTokenSvgUrl({
       label: firstLetterLabel(pc.name),
@@ -96,7 +96,26 @@ export async function noteInfo(moduleId, pc) {
 
 export async function snapshotInfo(moduleId, pc, color = TOKEN_COLOR) {
   const url = getPcSheetImageUrl(moduleId, pc.id, color);
-  const info = await imageInfoFromUrl(url, `${safeName(pc.name)}-character-sheet-snapshot.png`);
+  const filename = `${safeName(pc.name)}-character-sheet-snapshot.png`;
+  const sheetFile = await fetchImageBlob(url, filename);
+  const tokenPng = await rasterizeSvgFile(
+    new File(
+      [letterTokenSvg({ label: firstLetterLabel(pc.name), name: pc.name, color })],
+      `${safeName(pc.name)}-token.svg`,
+      { type: "image/svg+xml" }
+    ),
+    `${safeName(pc.name)}-token.png`,
+    512,
+    512
+  );
+  const composited = await overlayTokenOnImage(sheetFile, tokenPng, {
+    anchor: "top-left",
+    sizeRatio: 0.055,
+    maxSize: 68,
+    marginX: 28,
+    marginY: 22,
+  });
+  const info = await sceneImageFromFile(composited, { mime: "image/png" });
   return {
     ...info,
     grid: { dpi: 200, offset: { x: info.image.width / 2, y: info.image.height / 2 } },

@@ -38,11 +38,15 @@ export function encounterId(encounter) {
 
 export function mapUrl(encounter) {
   const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
+  const artifact = mapArtifact(encounter);
   return firstUrl(
     map?.url,
     map?.imageUrl,
     map?.src,
     map?.payload?.url,
+    map?.payload?.imageUrl,
+    artifact?.payload?.url,
+    artifact?.payload?.imageUrl,
     encounter.mapUrl,
     encounter.mapImageUrl,
     encounter.imageUrl
@@ -55,20 +59,75 @@ export function mapSourceId(encounter) {
 }
 
 export function mapDpi(encounter) {
+  const grid = encounterMapGrid(encounter);
   const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
   const value =
-    map?.grid?.cellSize ??
-    map?.payload?.grid?.cellSize ??
+    grid?.cellSize ??
+    grid?.dpi ??
+    grid?.gridSize ??
+    grid?.pixelsPerSquare ??
     map?.dpi ??
-    encounter.mapDpi ??
-    encounter.grid?.cellSize;
-  const dpi = Number.parseInt(value, 10);
+    encounter.mapDpi;
+  const dpi = Number.parseFloat(value);
   return Number.isFinite(dpi) && dpi > 0 ? dpi : undefined;
+}
+
+function artifactTypeKey(artifact) {
+  return artifact?.artifactType?.key ?? artifact?.artifactTypeKey ?? artifact?.type;
+}
+
+function mapArtifact(encounter) {
+  return (encounter?.artifacts ?? []).find((artifact) => artifactTypeKey(artifact) === "map") ?? null;
 }
 
 export function encounterMapGrid(encounter) {
   const map = encounter.map ?? encounter.battleMap ?? encounter.encounterMap;
-  return map?.grid ?? map?.payload?.grid ?? encounter.grid ?? null;
+  const artifact = mapArtifact(encounter);
+  const payload = map?.payload ?? artifact?.payload ?? {};
+  const candidates = [
+    map?.grid,
+    payload.grid,
+    encounter.grid,
+    encounter.metadata?.map?.grid,
+    encounter.metadata?.grid,
+    payload,
+    map,
+    artifact?.payload,
+  ];
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+      const cellSize =
+        candidate.cellSize ??
+        candidate.dpi ??
+        candidate.gridSize ??
+        candidate.pixelsPerSquare ??
+        candidate.squareSize;
+      const columns = candidate.columns ?? candidate.cols ?? candidate.squaresWide ?? candidate.gridWidth;
+      const rows = candidate.rows ?? candidate.squaresHigh ?? candidate.gridHeight;
+      const scale = candidate.scale ?? candidate.gridScale;
+      const offset = candidate.offset ?? candidate.gridOffset;
+      if (
+        cellSize != null ||
+        columns != null ||
+        rows != null ||
+        offset != null ||
+        candidate.offsetX != null ||
+        candidate.originX != null
+      ) {
+        return {
+          ...candidate,
+          cellSize: cellSize ?? candidate.cellSize,
+          columns: columns ?? candidate.columns,
+          rows: rows ?? candidate.rows,
+          scale: scale ?? candidate.scale,
+          offset: offset ?? candidate.offset,
+          width: candidate.width ?? payload.width ?? map?.width,
+          height: candidate.height ?? payload.height ?? map?.height,
+        };
+      }
+    }
+  }
+  return null;
 }
 
 export function encounterPlacements(encounter) {

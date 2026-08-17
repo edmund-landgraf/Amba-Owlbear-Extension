@@ -4,7 +4,7 @@ import { publishTokenPng } from "./tokenHost.js";
 import { rasterizedMonsterTokenFile } from "./tokenImage.js";
 import { rasterizeStatCardPng } from "./statCardImage.js";
 import { inferMapGrid } from "./mapGridInference.js";
-import { addItemsToCurrentScene, deleteItemsFromCurrentScene, moveItemsInCurrentScene, unlockAmbaStatCardsInCurrentScene } from "./sceneItems.js";
+import { addItemsToCurrentScene, deleteItemsFromCurrentScene, moveItemsInCurrentScene, unlockAmbaStatCardsInCurrentScene, unlockItemsInCurrentScene } from "./sceneItems.js";
 import { requireOpenScene } from "./sceneService.js";
 import {
   encounterId,
@@ -266,6 +266,20 @@ async function applySceneGridFromAmba(grid) {
   }
 }
 
+async function mapPositionForGrid(visualCenter, imageSize, grid) {
+  const sceneDpi = await sceneGridDpi();
+  const cellSize = grid?.cellSize;
+  const offset = grid?.offset ?? { x: imageSize.width / 2, y: imageSize.height / 2 };
+  if (!cellSize) return snapScenePosition(visualCenter);
+
+  const worldPerPixel = sceneDpi / cellSize;
+  const position = {
+    x: visualCenter.x + (offset.x - imageSize.width / 2) * worldPerPixel,
+    y: visualCenter.y + (offset.y - imageSize.height / 2) * worldPerPixel,
+  };
+  return snapScenePosition(position);
+}
+
 async function snapScenePosition(position) {
   try {
     if (typeof OBR.scene.grid.snapPosition === "function") {
@@ -277,12 +291,6 @@ async function snapScenePosition(position) {
   return position;
 }
 
-function itemScale(value) {
-  if (value && Number.isFinite(value.x) && Number.isFinite(value.y)) return value;
-  if (Number.isFinite(value)) return { x: value, y: value };
-  return null;
-}
-
 async function sceneGridDpi() {
   try {
     const dpi = await OBR.scene.grid.getDpi();
@@ -292,14 +300,26 @@ async function sceneGridDpi() {
   }
 }
 
+async function applyMapGridToItem(itemId, inferredGrid) {
+  if (!itemId || !inferredGrid?.cellSize) return;
+  await OBR.scene.items.updateItems([itemId], (items) => {
+    for (const item of items) {
+      item.grid = {
+        dpi: inferredGrid.cellSize,
+        offset: inferredGrid.offset ?? item.grid?.offset ?? { x: 0, y: 0 },
+      };
+      item.scale = { x: 1, y: 1 };
+      item.locked = inferredGrid.source === "metadata" || inferredGrid.source === "inferred";
+    }
+  });
+}
+
 async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems }) {
   const url = mapUrl(encounter);
   if (!url) return null;
 
   const sourceId = mapSourceId(encounter);
-  if (findImportedItem(importedItems, { kind: "encounter-map", sourceId })) {
-    return { skipped: true };
-  }
+  const existing = findImportedItem(importedItems, { kind: "encounter-map", sourceId });
 
   const info = await imageInfoFromUrl(
     url,
@@ -314,13 +334,26 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems
     await applySceneGridFromAmba(inferredGrid);
   }
   const warnings = inferredGrid?.warnings ?? [];
+
+  if (existing) {
+    await unlockItemsInCurrentScene([existing.id]);
+    await applyMapGridToItem(existing.id, inferredGrid);
+    const visualCenter = existing.position ?? { x: 0, y: 0 };
+    const snapped = await mapPositionForGrid(visualCenter, info.image, inferredGrid);
+    await moveItemsInCurrentScene([{ id: existing.id, position: snapped }]);
+    return {
+      updated: true,
+      bounds: boundsFromImageInfo(info, visualCenter),
+      warnings,
+    };
+  }
+
   const saved = savedMapPlacement(encounter);
   const mapImage = { ...info.image, url };
   const stagedPosition = imagePositionRightOfBounds(occupiedBounds, info, 1000);
   const position = saved?.position
     ? saved.position
-    : await snapScenePosition(stagedPosition);
-  const scale = itemScale(saved?.scale);
+    : await mapPositionForGrid(stagedPosition, info.image, inferredGrid);
   const rotation = Number.isFinite(saved?.rotation) ? saved.rotation : 0;
   const builder = buildImage(mapImage, info.grid)
     .name(`${encounterTitle(encounter)} Map`)
@@ -328,8 +361,7 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems
     .layer("MAP")
     .position(position)
     .rotation(rotation)
-    .locked(inferredGrid?.source === "metadata");
-  if (scale) builder.scale(scale);
+    .locked(inferredGrid?.source === "metadata" || inferredGrid?.source === "inferred");
   const item = builder
     .metadata({
       ...encounterItemMetadata({
@@ -371,9 +403,25 @@ async function resolveMonsterGroups(encounter) {
 }
 
 
-async function pushStatCardItem({ items, moduleId, encounter, block, name, count, variant, sourceId, position, gridDpi }) {
+async function pushStatCardItem({
+  items,
+  moduleId,
+  encounter,
+  block,
+  name,
+  count,
+  variant,
+  sourceId,
+  position,
+  gridDpi,
+  tokenLabel,
+  tokenColor,
+}) {
   const content = statCardContent(block, { name, count, variant });
-  const file = await rasterizeStatCardPng(content);
+  const tokenFile = tokenLabel
+    ? await rasterizedMonsterTokenFile({ label: tokenLabel, name, color: tokenColor })
+    : null;
+  const file = await rasterizeStatCardPng({ ...content, tokenFile });
   const url = await publishTokenPng(file);
   const dpi = gridDpi * 2;
   items.push(
@@ -492,6 +540,8 @@ async function buildMonsterStagingItems({
         sourceId: group.sourceId,
         position: { x: cardCenterX, y: cardCenterY },
         gridDpi,
+        tokenLabel: labelBase,
+        tokenColor: color,
       });
       cardsImported += 1;
     }
@@ -563,7 +613,7 @@ export async function addEncounterToCurrentScene({ moduleId, encounter, options 
   }
   await saveEncounterSceneMetadata({ moduleId, encounterId: id, title: encounterTitle(encounter) });
   return {
-    mapImported: Boolean(map?.item),
+    mapImported: Boolean(map?.item) || Boolean(map?.updated),
     mapSkipped: Boolean(map?.skipped),
     mapWarnings: map?.warnings ?? [],
     monsterTokensImported: monsterResult.tokenImported,

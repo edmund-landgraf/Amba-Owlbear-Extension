@@ -32,6 +32,33 @@ export async function imageSizeFromBlob(blob, name) {
   }
 }
 
+export async function mediumTokenFromFile(file, filename = file.name) {
+  const size = await imageSizeFromBlob(file, filename);
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const context = canvas.getContext("2d");
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(512 / size.width, 512 / size.height);
+    const drawWidth = size.width * scale;
+    const drawHeight = size.height * scale;
+    context.drawImage(bitmap, (512 - drawWidth) / 2, (512 - drawHeight) / 2, drawWidth, drawHeight);
+  } finally {
+    bitmap.close();
+  }
+  const png = await new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error(`Unable to render ${filename}`));
+        return;
+      }
+      resolve(new File([blob], filename.replace(/\.[^.]+$/, "") + ".png", { type: "image/png" }));
+    }, "image/png");
+  });
+  return sceneImageFromFile(png, { width: 512, height: 512, dpi: 512, mime: "image/png" });
+}
+
 export async function sceneImageFromFile(file, { width, height, dpi, mime } = {}) {
   const size =
     Number.isFinite(width) && Number.isFinite(height)
@@ -62,6 +89,43 @@ export function dataUrlFromFile(file) {
     reader.onerror = () => reject(new Error(`Unable to encode ${file.name || "image"}`));
     reader.readAsDataURL(file);
   });
+}
+
+export async function overlayTokenOnImage(
+  baseFile,
+  tokenFile,
+  { size, sizeRatio = 0.08, maxSize, margin, marginX, marginY, anchor = "top-right" } = {}
+) {
+  const base = await createImageBitmap(baseFile);
+  const token = await createImageBitmap(tokenFile);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = base.width;
+    canvas.height = base.height;
+    const context = canvas.getContext("2d");
+    context.drawImage(base, 0, 0);
+    const tokenSize = Math.min(
+      size ?? Math.round(Math.min(base.width, base.height) * sizeRatio),
+      maxSize ?? Number.POSITIVE_INFINITY
+    );
+    const padX = marginX ?? margin ?? Math.round(Math.max(12, tokenSize * 0.35));
+    const padY = marginY ?? margin ?? Math.round(Math.max(12, tokenSize * 0.35));
+    const x = anchor === "top-left" ? padX : base.width - padX - tokenSize;
+    const y = padY;
+    context.drawImage(token, x, y, tokenSize, tokenSize);
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error(`Unable to overlay token on ${baseFile.name || "image"}`));
+          return;
+        }
+        resolve(new File([blob], baseFile.name || "image.png", { type: "image/png" }));
+      }, "image/png");
+    });
+  } finally {
+    base.close();
+    token.close();
+  }
 }
 
 export async function rasterizeSvgFile(svgFile, filename, width, height) {
