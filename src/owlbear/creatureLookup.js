@@ -135,18 +135,13 @@ function userMonsterIdFromRow(row) {
   return positiveId(row?.UserMonsterId ?? row?.userMonsterId);
 }
 
-function catalogMonsterIdFromRow(row) {
-  return positiveId(row?.MonsterId ?? row?.monsterId);
-}
-
 export function artUrlFromLocalRow(row) {
   if (!row) return null;
   const userId = userMonsterIdFromRow(row);
   if (userId) return `${LOCAL_PF2_API_BASE_URL}/api/user-monsters/${userId}/image`;
-  const catalogId = catalogMonsterIdFromRow(row);
-  if (catalogId) return `${LOCAL_PF2_API_BASE_URL}/api/monsters/${catalogId}/image`;
   const rawImage = row?.ImageUrl ?? row?.imageUrl ?? row?.image_url ?? row?.RawJson?.image ?? row?.rawJson?.image;
-  return browserFetchableArtUrl(localImageUrl(rawImage));
+  if (rawImage) return browserFetchableArtUrl(localImageUrl(rawImage));
+  return null;
 }
 
 async function lookupLocalMonsterImage(name, aonId = null) {
