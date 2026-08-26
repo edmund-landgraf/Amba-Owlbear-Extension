@@ -47,15 +47,27 @@ export async function getImportedEncounterItems(moduleId, encounterId) {
   return OBR.scene.items.getItems((item) => hasEncounterIdentity(item, moduleId, encounterId));
 }
 
-export async function saveEncounterSceneMetadata({ moduleId, encounterId, title }) {
+export function isMonsterStagingKind(kind) {
+  return kind === "monster-token" || kind === "monster-stat-card" || kind === "monster-stat-card-text";
+}
+
+export async function getEncounterSceneMetadata() {
   const metadata = await OBR.scene.getMetadata();
+  return metadata?.[META.scene] ?? null;
+}
+
+export async function saveEncounterSceneMetadata({ moduleId, encounterId, title, lastPlacement }) {
+  const metadata = await OBR.scene.getMetadata();
+  const previous = metadata?.[META.scene] ?? {};
   await OBR.scene.setMetadata({
     ...metadata,
     [META.scene]: {
+      ...previous,
       moduleId,
       encounterId,
       title,
       updatedAt: new Date().toISOString(),
+      ...(lastPlacement ? { lastPlacement } : {}),
     },
   });
 }

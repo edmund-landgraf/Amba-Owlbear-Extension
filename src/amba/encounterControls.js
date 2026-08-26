@@ -1,6 +1,7 @@
-import { getContainers, getEncounter, getPcs } from "./ambaApi.js";
+import { getContainers, getEncounter, getPcs, unlockPf2ArtIfNeeded } from "./ambaApi.js";
 import { analyzeEncounterForExport, renderEncounterAnalysis } from "./encounterAnalysis.js";
 import { addEncounterToCurrentScene } from "../owlbear/encounterImporter.js";
+import { clearCreatureLookupCache } from "../owlbear/creatureLookup.js";
 import { saveEncounterPlacementsToAmba } from "../owlbear/placementSync.js";
 import { addPcTokensAndNotesToCurrentScene } from "../owlbear/pcImporter.js";
 import { encounterImportSummary, encounterKey, encounterLabel, errorMessage } from "./uiHelpers.js";
@@ -17,6 +18,7 @@ export function wireEncounterControls({
   optionImportStatCards,
   optionIncludeMonsterArt,
   optionMakeTokenArt,
+  optionRandomizeTokenColors,
   optionIncludePcTokens,
   encounterStatus,
   encounterDiagnostics,
@@ -93,6 +95,7 @@ export function wireEncounterControls({
       importStatCards: optionImportStatCards?.checked ?? true,
       includeMonsterArt: optionIncludeMonsterArt?.checked ?? false,
       makeTokenArt: false,
+      randomizeTokenColors: optionRandomizeTokenColors?.checked ?? false,
       includePcTokens: optionIncludePcTokens?.checked ?? false,
     };
   }
@@ -256,8 +259,17 @@ export function wireEncounterControls({
         if (!message) return;
         importLog.push(message);
         encounterStatus.textContent = message;
-        if (encounterDiagnostics) encounterDiagnostics.textContent = importLog.slice(-12).join("\n");
+        if (encounterDiagnostics) encounterDiagnostics.textContent = importLog.join("\n");
       };
+      if (options.includeMonsterArt) {
+        const unlocked = await unlockPf2ArtIfNeeded(onStatus);
+        if (unlocked == null) {
+          onStatus("Import cancelled.");
+          return;
+        }
+        if (!unlocked) options.includeMonsterArt = false;
+        else clearCreatureLookupCache();
+      }
       const result = await addEncounterToCurrentScene({ moduleId, encounter, options, onStatus });
       let pcCount = 0;
       if (options.includePcTokens) {
@@ -270,7 +282,7 @@ export function wireEncounterControls({
       }
       if (encounterDiagnostics) {
         importLog.push(`Scene metadata updated for AMBA encounter ${encounter.id ?? encounter.encounterId ?? encounterPicker.value}. Re-import preserves existing AMBA token positions.`);
-        encounterDiagnostics.textContent = importLog.slice(-12).join("\n");
+        encounterDiagnostics.textContent = importLog.join("\n");
       }
     } catch (error) {
       encounterStatus.textContent = errorMessage(error, "Unable to import encounter.");
@@ -327,6 +339,7 @@ export function wireEncounterControls({
     optionImportStatCards,
     optionIncludeMonsterArt,
     optionMakeTokenArt,
+    optionRandomizeTokenColors,
     optionIncludePcTokens,
   ]) {
     option?.addEventListener("change", () => {

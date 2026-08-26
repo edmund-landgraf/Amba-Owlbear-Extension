@@ -98,3 +98,60 @@ select option {
 .error {
   color: #d33;
 }
+
+.modal {
+  align-items: center;
+  background: rgba(12, 14, 22, 0.72);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 20;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-card {
+  background: #303548;
+  border: 1px solid #555d78;
+  border-radius: 8px;
+  margin: 16px;
+  padding: 16px;
+  width: min(320px, calc(100% - 32px));
+}
+
+.modal-card input[type="password"],
+.modal-card input[type="text"] {
+  background: #f8f9ff;
+  border: 1px solid #cdd3e8;
+  box-sizing: border-box;
+  color: #161a24;
+  display: block;
+  flex: 1;
+  font: inherit;
+  margin: 0;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.password-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.password-row button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

@@ -1,0 +1,14 @@
+{
+  "name": "AMBA (prod)",
+  "version": "0.0.1",
+  "manifest_version": 1,
+  "author": "Edmund Landgraf",
+  "icon": "https://owlbear.unwhelm.online/favicon.svg",
+  "action": {
+    "title": "AMBA (prod)",
+    "icon": "https://owlbear.unwhelm.online/favicon.svg",
+    "popover": "https://owlbear.unwhelm.online/",
+    "height": 500,
+    "width": 400
+  }
+}

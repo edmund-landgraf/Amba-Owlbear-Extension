@@ -1,11 +1,11 @@
 {
-  "name": "AMBA",
+  "name": "AMBA (local)",
   "version": "0.0.1",
   "manifest_version": 1,
   "author": "Edmund Landgraf",
   "icon": "/favicon.svg",
   "action": {
-    "title": "AMBA",
+    "title": "AMBA (local)",
     "icon": "/favicon.svg",
     "popover": "/",
     "height": 500,

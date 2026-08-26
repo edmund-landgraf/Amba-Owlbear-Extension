@@ -1,3 +1,5 @@
+import { normalizePf2eActionTokens } from "./pf2eActionIcons.js";
+
 const AON_ORIGIN = "https://2e.aonprd.com";
 
 export function aonMonsterUrl(path) {
@@ -55,10 +57,12 @@ export function aonCreatureIdFromPath(path) {
 }
 
 export function stripAonMarkup(value) {
-  return String(value ?? "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/[_*]/g, "")
+  return normalizePf2eActionTokens(
+    String(value ?? "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[_*]/g, "")
+  )
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -106,7 +110,10 @@ export function pickAonCreatureHit(hits, query) {
     };
     return score(b) - score(a);
   });
-  return ranked[0] ?? null;
+  const top = ranked[0] ?? null;
+  const topName = String(top?._source?.name ?? "").trim().toLocaleLowerCase();
+  if (top && topName && topName !== needle) return null;
+  return top;
 }
 
 export function applyPf2eVariant(source, variant) {

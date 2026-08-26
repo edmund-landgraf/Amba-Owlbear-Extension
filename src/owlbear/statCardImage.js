@@ -1,4 +1,5 @@
 import { dataUrlFromFile } from "./imageUtils.js";
+import { actionIconGroup, iconLayoutSize, tokenizeStatValue } from "./pf2eActionIcons.js";
 
 function escapeXml(value) {
   return String(value ?? "")
@@ -28,6 +29,61 @@ function wrapLine(text, maxWidth, fontSize, bold = false) {
   }
   lines.push(current);
   return lines;
+}
+
+function tokenWidth(token, fontSize) {
+  if (token.icon) return iconLayoutSize(fontSize) + fontSize * 0.18;
+  return estimateTextWidth(token.text, fontSize);
+}
+
+function flattenWrapUnits(tokens) {
+  const units = [];
+  for (const token of tokens) {
+    if (token.icon) {
+      units.push(token);
+      continue;
+    }
+    const words = String(token.text ?? "").split(/(\s+)/).filter((part) => part.length);
+    for (const part of words) units.push({ text: part });
+  }
+  return units;
+}
+
+function wrapTokens(tokens, maxWidth, fontSize) {
+  const units = flattenWrapUnits(tokens);
+  if (!units.length) return [[]];
+  const lines = [];
+  let current = [];
+  let width = 0;
+  for (const unit of units) {
+    if (!unit.icon && /^\s+$/.test(unit.text) && !current.length) continue;
+    const nextWidth = tokenWidth(unit, fontSize);
+    if (current.length && width + nextWidth > maxWidth) {
+      lines.push(current);
+      current = unit.icon || !/^\s+$/.test(unit.text) ? [unit] : [];
+      width = current.length ? nextWidth : 0;
+      continue;
+    }
+    current.push(unit);
+    width += nextWidth;
+  }
+  if (current.length) lines.push(current);
+  return lines.length ? lines : [[]];
+}
+
+function renderTokenLine({ parts, x, y, tokens, size }) {
+  let cursor = x;
+  for (const token of tokens) {
+    if (token.icon) {
+      const box = iconLayoutSize(size);
+      parts.push(actionIconGroup(token.icon, cursor, y - box + 3, box));
+      cursor += box + size * 0.18;
+      continue;
+    }
+    if (!token.text) continue;
+    parts.push(textNode({ x: cursor, y, text: token.text, size }));
+    cursor += estimateTextWidth(token.text, size);
+  }
 }
 
 function textNode({ x, y, text, size = 17, weight = "400", fill = "#251f1a", family = "Consolas, ui-monospace, monospace" }) {
@@ -106,8 +162,8 @@ export async function renderStatCardSvgFile({
       artBounds && y < artBounds.y + artBounds.height + lineHeight
         ? textMaxWidth
         : maxWidth;
-    const wrapped = wrapLine(
-      value,
+    const wrapped = wrapTokens(
+      tokenizeStatValue(value),
       Math.max(120, rowMaxWidth - labelWidth),
       labelSize
     );
@@ -116,7 +172,7 @@ export async function renderStatCardSvgFile({
       if (index === 0) {
         parts.push(textNode({ x: left, y, text: labelText, size: labelSize, weight: "700" }));
       }
-      parts.push(textNode({ x: left + labelWidth, y, text: wrapped[index], size: labelSize }));
+      renderTokenLine({ parts, x: left + labelWidth, y, tokens: wrapped[index], size: labelSize });
       y += lineHeight;
     }
   }

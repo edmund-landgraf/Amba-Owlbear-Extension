@@ -3,6 +3,23 @@ import { authFetchOptionsForUrl } from "../amba/ambaApi.js";
 import { publishTokenPng } from "./tokenHost.js";
 import { svgFileWithEmbeddedTokenFont } from "./tokenSvg.js";
 
+const PF2_API_BASE_URL = (import.meta.env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
+
+/** AoN image hosts 404 without CORS; rewrite those paths onto the PF2 API origin so site auth can apply. */
+export function browserFetchableArtUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(String(url), `${PF2_API_BASE_URL}/`);
+    if (/(^|\.)aonprd\.com$/i.test(parsed.hostname)) {
+      return new URL(`${parsed.pathname}${parsed.search}`, `${PF2_API_BASE_URL}/`).href;
+    }
+    parsed.pathname = parsed.pathname.replace(/\/image\/thumb\/?$/i, "/image");
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 export function safeName(value, fallback = "asset") {
   return String(value ?? fallback)
     .replace(/[^a-z0-9_-]+/gi, "-")
@@ -12,7 +29,11 @@ export function safeName(value, fallback = "asset") {
 
 export async function fetchImageBlob(url, filename) {
   const response = await fetch(url, authFetchOptionsForUrl(url));
-  if (!response.ok) throw new Error(`Unable to load ${filename}: ${response.status}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const detail = typeof body?.error === "string" ? ` ${body.error}` : "";
+    throw new Error(`Unable to load ${filename}: ${response.status}${detail}`);
+  }
   const blob = await response.blob();
   if (!blob.size) throw new Error(`${filename} was empty.`);
   return new File([blob], filename, { type: blob.type || "image/png" });
@@ -57,6 +78,33 @@ export async function mediumTokenFromFile(file, filename = file.name) {
     }, "image/png");
   });
   return sceneImageFromFile(png, { width: 512, height: 512, dpi: 512, mime: "image/png" });
+}
+
+export async function scaleImageToFit(file, maxWidth, maxHeight, filename = file.name) {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(maxWidth / bitmap.width, maxHeight / bitmap.height, 1);
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(bitmap, 0, 0, width, height);
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error(`Unable to scale ${filename}`));
+          return;
+        }
+        resolve(new File([blob], String(filename).replace(/\.[^.]+$/, "") + ".png", { type: "image/png" }));
+      }, "image/png");
+    });
+  } finally {
+    bitmap.close();
+  }
 }
 
 export async function sceneImageFromFile(file, { width, height, dpi, mime } = {}) {

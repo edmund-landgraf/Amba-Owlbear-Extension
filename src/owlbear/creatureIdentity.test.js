@@ -145,3 +145,10 @@ test("AoN remaster hit formats a consistent Greater Shadow stat block", async ()
   assert.match(elite.statBlock, /shadow hand \+20/);
   assert.match(elite.statBlock, /DC 27/);
 });
+
+test("AoN name search ignores non-exact creature hits", async () => {
+  const { pickAonCreatureHit } = await import("./aonStatBlock.js");
+  const hits = [{ _source: { name: "Greater Shadow", url: "/Monsters.aspx?ID=3187" } }];
+  assert.equal(pickAonCreatureHit(hits, "Thornwick Echo"), null);
+  assert.equal(pickAonCreatureHit(hits, "Greater Shadow")?._source?.name, "Greater Shadow");
+});

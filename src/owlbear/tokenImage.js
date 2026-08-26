@@ -2,8 +2,8 @@ import { fetchImageBlob, imageSizeFromBlob, rasterizeSvgFile, sceneImageFromFile
 import { labelFontSize } from "./monsterLabels.js";
 import { monsterTokenSvg } from "./tokenSvg.js";
 
-export async function rasterizedMonsterTokenFile({ label, name, color }) {
-  const svg = monsterTokenSvg({ label, name, color, fontSize: labelFontSize(label) });
+export async function rasterizedMonsterTokenFile({ label, name, color, textFill, textStroke }) {
+  const svg = monsterTokenSvg({ label, name, color, fontSize: labelFontSize(label), textFill, textStroke });
   const svgFile = new File([svg], `${label || "monster"}-token.svg`, { type: "image/svg+xml" });
   return rasterizeSvgFile(svgFile, `${label || "monster"}-token.png`, 512, 512);
 }

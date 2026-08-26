@@ -84,6 +84,47 @@ export function belowBounds(bounds, margin = 500) {
   };
 }
 
+export function boundsFromCenteredSize(position, width, height) {
+  return {
+    min: { x: position.x - width / 2, y: position.y - height / 2 },
+    max: { x: position.x + width / 2, y: position.y + height / 2 },
+    width,
+    height,
+  };
+}
+
+export function lastPlacementFromBounds(bounds) {
+  if (!bounds) return null;
+  return {
+    x: bounds.min.x,
+    y: bounds.min.y,
+    maxX: bounds.max.x,
+    maxY: bounds.max.y,
+  };
+}
+
+export function nextOriginFromLastPlacement(last, occupiedBounds, margin = 400) {
+  const fromOccupied = belowBounds(occupiedBounds, margin);
+  if (!last || !Number.isFinite(Number(last.maxY))) return fromOccupied;
+  const x = Number.isFinite(Number(last.x)) ? Number(last.x) : fromOccupied.x;
+  const yFromLast = Number(last.maxY) + margin;
+  return {
+    x,
+    y: Math.max(yFromLast, fromOccupied.y),
+  };
+}
+
+export async function getItemListBounds(items) {
+  if (!items?.length) return null;
+  try {
+    const bounds = await OBR.scene.items.getItemBounds(items.map((item) => item.id));
+    if (bounds) return bounds;
+  } catch {
+    // Fall back to position centers when Owlbear cannot resolve visual bounds.
+  }
+  return boundsFromItems(items);
+}
+
 export function imagePositionRightOfBounds(bounds, imageInfo, margin = 800) {
   if (!bounds) return { x: 600, y: 600 };
   return {

@@ -24,7 +24,7 @@ export async function saveEncounterPlacementsToAmba({ moduleId, encounter }) {
   const placements = items
     .filter((item) => {
       const kind = item.metadata?.[META.kind];
-      return kind === "monster-token" || kind === "encounter-map";
+      return kind === "monster-token" || kind === "monster-stat-card" || kind === "encounter-map";
     })
     .map(placementFromItem);
 

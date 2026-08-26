@@ -47,6 +47,7 @@ export function renderAppShell() {
           <label><input id="optionImportStatCards" type="checkbox" checked /> Push monster stat cards</label>
           <label><input id="optionIncludeMonsterArt" type="checkbox" /> Include monster art</label>
           <label><input id="optionMakeTokenArt" type="checkbox" disabled /> Make token art</label>
+          <label><input id="optionRandomizeTokenColors" type="checkbox" /> Randomize token art colors</label>
           <label><input id="optionIncludePcTokens" type="checkbox" /> Push PC tokens</label>
         </fieldset>
         <button id="importEncounter" disabled>Import encounter</button>
@@ -55,5 +56,20 @@ export function renderAppShell() {
         <p id="encounterStatus" aria-live="polite"></p>
       </section>
     </main>
+    <div id="pf2ArtPasswordDialog" class="modal" hidden>
+      <form id="pf2ArtPasswordForm" class="modal-card">
+        <h2>PF2 monster art</h2>
+        <label class="field-label" for="pf2ArtPasswordInput">Password</label>
+        <div class="password-row">
+          <input id="pf2ArtPasswordInput" type="password" autocomplete="current-password" />
+          <button type="button" id="pf2ArtPasswordShow">Show text</button>
+        </div>
+        <p id="pf2ArtPasswordError" class="error" hidden></p>
+        <div class="modal-actions">
+          <button type="button" id="pf2ArtPasswordCancel">Cancel</button>
+          <button type="submit">Unlock</button>
+        </div>
+      </form>
+    </div>
   `;
 }

@@ -112,6 +112,9 @@ function exportPlanText(analysis, options) {
   if (options.importStatCards && analysis.monsterBlockCount) parts.push("stat cards");
   if (options.includeMonsterArt && options.importStatCards && analysis.monsterBlockCount) parts.push("monster art on cards");
   if (options.makeTokenArt && options.importMonsterTokens && analysis.monsterBlockCount) parts.push("art tokens");
+  if (options.randomizeTokenColors && options.importMonsterTokens && analysis.monsterBlockCount) {
+    parts.push("randomized token colors");
+  }
   if (options.includePcTokens) parts.push("PC tokens");
   if (!parts.length) return "nothing selected";
   return parts.join(", ");

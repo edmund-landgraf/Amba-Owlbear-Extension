@@ -149,6 +149,15 @@ export function savedMapPlacement(encounter) {
   );
 }
 
+export function savedTokenPlacement(encounter, tokenInstanceId) {
+  if (!tokenInstanceId) return null;
+  return (
+    encounterPlacements(encounter).find(
+      (placement) => placement?.kind === "monster-token" && placement?.tokenInstanceId === tokenInstanceId
+    ) ?? null
+  );
+}
+
 export function monsterBlocks(encounter) {
   const blocks =
     encounter.monsterBlocks ??

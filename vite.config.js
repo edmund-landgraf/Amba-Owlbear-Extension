@@ -20,8 +20,19 @@ function corsHeaders(req, res) {
   res.setHeader("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] ?? "*");
 }
 
+function owlbearManifestEnvName() {
+  return {
+    name: "owlbear-manifest-env-name",
+    closeBundle() {
+      const prodManifest = readFileSync(join(process.cwd(), "public", "manifest.prod.json"), "utf8");
+      writeFileSync(join(process.cwd(), "dist", "manifest.json"), prodManifest.endsWith("\n") ? prodManifest : `${prodManifest}\n`);
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    owlbearManifestEnvName(),
     {
       name: "owlbear-local-private-network",
       configureServer(server) {

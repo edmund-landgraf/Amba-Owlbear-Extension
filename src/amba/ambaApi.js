@@ -5,7 +5,10 @@ import { devSmokeEncounter, devSmokeEncounters } from "./devSmokeEncounter.js";
 // lives, and gives us one future place to swap localhost for production.
 const AMBA_BASE_URL = import.meta.env.VITE_AMBA_BASE_URL ?? "";
 const AMBA_AUTH_BASE_URL = import.meta.env.VITE_AMBA_BASE_URL || "http://localhost:5190";
+const PF2_API_BASE_URL = (import.meta.env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
 const OWLBEAR_AUTH_TOKEN_KEY = "amba.owlbear.authToken";
+const PF2_ART_UNLOCK_UNTIL_KEY = "amba.pf2.artUnlockedUntil";
+const PF2_ART_COOKIE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function toApiUrl(path) {
   return `${AMBA_BASE_URL}${toExtensionApiPath(path)}`;
@@ -233,6 +236,148 @@ export function isTrustedOwlbearAuthOrigin(origin) {
   return origin === new URL(AMBA_AUTH_BASE_URL).origin;
 }
 
+async function pf2Json(path, options = {}) {
+  const response = await fetch(`${PF2_API_BASE_URL}${path}`, {
+    credentials: "include",
+    ...options,
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error ?? `PF2 request failed: ${response.status}`);
+  }
+  return body;
+}
+
+async function requestAndUnlockPf2Art(onStatus = () => {}) {
+  const dialog = document.getElementById("pf2ArtPasswordDialog");
+  const form = document.getElementById("pf2ArtPasswordForm");
+  const input = document.getElementById("pf2ArtPasswordInput");
+  const cancel = document.getElementById("pf2ArtPasswordCancel");
+  const errorEl = document.getElementById("pf2ArtPasswordError");
+  const show = document.getElementById("pf2ArtPasswordShow");
+  if (!dialog || !form || !input) return null;
+
+  input.value = "";
+  input.type = "password";
+  if (show) show.textContent = "Show text";
+  if (errorEl) {
+    errorEl.hidden = true;
+    errorEl.textContent = "";
+  }
+  dialog.hidden = false;
+  input.focus();
+
+  return new Promise((resolve) => {
+    const finish = (value) => {
+      form.removeEventListener("submit", onSubmit);
+      cancel?.removeEventListener("click", onCancel);
+      show?.removeEventListener("click", onShow);
+      dialog.hidden = true;
+      input.type = "password";
+      input.value = "";
+      resolve(value);
+    };
+    const onShow = () => {
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      if (show) show.textContent = visible ? "Show text" : "Hide text";
+    };
+    const showError = (message) => {
+      if (errorEl) {
+        errorEl.hidden = false;
+        errorEl.textContent = message;
+      }
+      input.focus();
+      input.select();
+    };
+    const onSubmit = async (event) => {
+      event.preventDefault();
+      const password = input.value;
+      if (!password) {
+        showError("Enter the art password.");
+        return;
+      }
+      onStatus("Sending art password...");
+      try {
+        await pf2Json("/api/art/unlock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        });
+        const config = await pf2Json("/api/config");
+        if (!config?.enableArt && !config?.artUnlocked) {
+          onStatus("Password rejected.");
+          showError("Password was accepted, but the art cookie was not stored. Art stays locked.");
+          finish(false);
+          return;
+        }
+        onStatus("Password accepted.");
+        rememberPf2ArtUnlock();
+        finish(true);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Invalid password";
+        onStatus("Password rejected.");
+        showError(message);
+        finish(false);
+      }
+    };
+    const onCancel = () => finish(null);
+    form.addEventListener("submit", onSubmit);
+    cancel?.addEventListener("click", onCancel);
+    show?.addEventListener("click", onShow);
+  });
+}
+
+/** Prompt only when PF2 art is locked; unlocks via POST /api/art/unlock (pf2_art cookie). */
+export async function unlockPf2ArtIfNeeded(onStatus = () => {}) {
+  const config = await pf2Json("/api/config").catch(() => null);
+
+  if (config?.enableArt) {
+    onStatus("Password accepted.");
+    return true;
+  }
+
+  if (config?.artUnlocked) {
+    rememberPf2ArtUnlock();
+    onStatus("Password accepted.");
+    return true;
+  }
+
+  if (config && config.artUnlocked === false) {
+    clearPf2ArtUnlockCache();
+  } else if (isPf2ArtUnlockCached()) {
+    onStatus("Password accepted.");
+    return true;
+  }
+
+  return requestAndUnlockPf2Art(onStatus);
+}
+
+function rememberPf2ArtUnlock() {
+  try {
+    localStorage.setItem(PF2_ART_UNLOCK_UNTIL_KEY, String(Date.now() + PF2_ART_COOKIE_MAX_AGE_MS));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function clearPf2ArtUnlockCache() {
+  try {
+    localStorage.removeItem(PF2_ART_UNLOCK_UNTIL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function isPf2ArtUnlockCached() {
+  try {
+    const until = Number(localStorage.getItem(PF2_ART_UNLOCK_UNTIL_KEY));
+    return Number.isFinite(until) && until > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 function authHeaders(base = {}) {
   const token = localStorage.getItem(OWLBEAR_AUTH_TOKEN_KEY);
   return token ? { ...base, Authorization: `Bearer ${token}` } : Object.keys(base).length ? base : null;
@@ -250,6 +395,15 @@ export function authFetchOptions(base = {}) {
 export function authFetchOptionsForUrl(url, base = {}) {
   const parsedUrl = new URL(url, window.location.origin);
   const ambaOrigin = new URL(AMBA_BASE_URL || window.location.origin).origin;
+  let pf2Origin = null;
+  try {
+    pf2Origin = new URL(PF2_API_BASE_URL).origin;
+  } catch {
+    pf2Origin = null;
+  }
+  if (pf2Origin && parsedUrl.origin === pf2Origin) {
+    return { ...base, credentials: base.credentials ?? "include" };
+  }
   if (parsedUrl.origin !== ambaOrigin || !parsedUrl.pathname.startsWith("/api/")) {
     return base;
   }

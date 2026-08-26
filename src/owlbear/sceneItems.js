@@ -36,11 +36,13 @@ export async function unlockAmbaStatCardsInCurrentScene() {
 export async function moveItemsInCurrentScene(moves) {
   if (!moves?.length) return;
   await requireOpenScene();
-  const byId = new Map(moves.map((move) => [move.id, move.position]));
+  const byId = new Map(moves.map((move) => [move.id, move]));
   await OBR.scene.items.updateItems([...byId.keys()], (items) => {
     for (const item of items) {
-      const position = byId.get(item.id);
-      if (position) item.position = position;
+      const move = byId.get(item.id);
+      if (!move) continue;
+      if (move.position) item.position = move.position;
+      if (move.description) item.description = move.description;
     }
   });
 }
