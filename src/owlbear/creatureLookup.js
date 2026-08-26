@@ -1,4 +1,4 @@
-import { aonCreatureIdFromPath, creatureFromAonHit, pickAonCreatureHit } from "./aonStatBlock.js";
+import { aonCreatureIdFromPath, aonMonsterUrl, creatureFromAonHit, pickAonCreatureHit } from "./aonStatBlock.js";
 import { browserFetchableArtUrl } from "./imageUtils.js";
 
 const AON_SEARCH_URL = "https://elasticsearch.aonprd.com/aon/_search";
@@ -144,14 +144,22 @@ export function artUrlFromLocalRow(row) {
   return null;
 }
 
-async function lookupLocalMonsterImage(name, aonId = null) {
+export function sourceUrlFromLocalRow(row) {
+  if (!row) return null;
+  const raw = String(row.AonUrl ?? row.aonUrl ?? row.aon_url ?? "").trim();
+  if (/aonprd\.com/i.test(raw)) return raw.startsWith("http") ? raw : aonMonsterUrl(raw);
+  const aonId = localMonsterAonId(row);
+  if (aonId) return aonMonsterUrl(`/Monsters.aspx?ID=${aonId}`);
+  return null;
+}
+
+async function lookupLocalMonsterRow(name, aonId = null) {
   const query = String(name ?? "").trim();
   if (!query) return null;
 
   const params = new URLSearchParams({ name: query, limit: "8" });
   const data = await fetchJsonWithTimeout(`${LOCAL_PF2_API_BASE_URL}/api/monsters?${params}`);
-  const row = pickLocalMonster(localMonsterRows(data), query, aonId);
-  return artUrlFromLocalRow(row);
+  return pickLocalMonster(localMonsterRows(data), query, aonId);
 }
 
 async function withLocalMonsterArt(result, fallbackName = "") {
@@ -159,16 +167,22 @@ async function withLocalMonsterArt(result, fallbackName = "") {
   if (!names.length) return result;
 
   const aonId = aonIdFromLookupResult(result);
+  let merged = result;
   for (const lookupName of names) {
-    const imageUrl = await lookupLocalMonsterImage(lookupName, aonId);
-    if (!imageUrl) continue;
-    return {
-      ...(result ?? { name: lookupName }),
-      imageUrl,
+    const row = await lookupLocalMonsterRow(lookupName, aonId);
+    if (!row) continue;
+    const imageUrl = merged?.imageUrl || artUrlFromLocalRow(row);
+    const sourceUrl = merged?.sourceUrl || sourceUrlFromLocalRow(row);
+    if (!imageUrl && !sourceUrl) continue;
+    merged = {
+      ...(merged ?? { name: lookupName }),
+      ...(imageUrl ? { imageUrl } : {}),
+      ...(sourceUrl ? { sourceUrl } : {}),
     };
+    if (imageUrl && sourceUrl) return merged;
   }
 
-  return result;
+  return merged;
 }
 
 async function lookupPf2eCreatureByPath(path, variant = null, fallbackName = "") {
@@ -213,7 +227,7 @@ export async function lookupCreatureName({ query, aonPath = null, ruleset = "pf2
     : `${ruleset}|${normalizedQuery.toLocaleLowerCase()}|${variant ?? "normal"}`;
   if (cache.has(key)) {
     const cached = cache.get(key);
-    if (cached?.imageUrl) return cached;
+    if (cached?.imageUrl && cached?.sourceUrl) return cached;
     const withArt = await withLocalMonsterArt(cached, normalizedQuery);
     cache.set(key, withArt);
     return withArt;

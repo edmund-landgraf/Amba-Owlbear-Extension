@@ -2,6 +2,12 @@ import { saveOwlbearPlacements } from "../amba/ambaApi.js";
 import { encounterId } from "./encounterData.js";
 import { getImportedEncounterItems, META } from "./encounterMetadata.js";
 
+function sourceUrlFromItem(item) {
+  const description = String(item.description ?? "");
+  const match = description.match(/https?:\/\/\S+/i);
+  return match?.[0] ?? null;
+}
+
 function placementFromItem(item) {
   const metadata = item.metadata ?? {};
   return {
@@ -11,6 +17,8 @@ function placementFromItem(item) {
     monsterId: metadata[META.monsterId],
     tokenInstanceId: metadata[META.tokenInstanceId],
     name: item.name,
+    description: item.description,
+    sourceUrl: sourceUrlFromItem(item),
     layer: item.layer,
     position: item.position,
     rotation: item.rotation ?? 0,

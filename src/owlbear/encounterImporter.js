@@ -28,6 +28,7 @@ import {
   monsterStatBlock,
 } from "./encounterData.js";
 import { buildTokenFills, contrastingGlyphColors } from "./tokenColors.js";
+import { aonMonsterUrl } from "./aonStatBlock.js";
 import { encounterRuleset, lookupCreatureName } from "./creatureLookup.js";
 import {
   boundsFromCenteredSize,
@@ -310,6 +311,9 @@ async function resolveMonsterGroups(encounter, onStatus = () => {}) {
       if (looked?.source) group.block.source = looked.source;
       if (looked?.size) group.block.size = looked.size;
       if (looked?.sourceUrl) group.block.sourceUrl = looked.sourceUrl;
+      else if (identity.aonPath) group.block.sourceUrl = aonMonsterUrl(identity.aonPath);
+      if (group.block.sourceUrl) onStatus(`AoN link for ${displayName}: ${group.block.sourceUrl}`);
+      else onStatus(`No AoN link for ${displayName}.`);
       if (looked?.imageUrl) {
         const usable = browserFetchableArtUrl(looked.imageUrl);
         if (usable) {
