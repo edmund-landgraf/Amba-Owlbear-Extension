@@ -1,4 +1,4 @@
-import { extractAonCreaturePath } from "./aonStatBlock.js";
+import { aonMonsterUrl, extractAonCreaturePath } from "./aonStatBlock.js";
 
 const VARIANT_PATTERN = /^(elite|weak)\b\s*[—–\-:]*\s*/i;
 const LEADING_QUANTITY = /^(\d+)\s*[x×]\s+/i;
@@ -119,6 +119,61 @@ export function monsterAonPath(block) {
   return extractAonCreaturePath(blockLookupText(block));
 }
 
+const DEMIPLANE_MARKDOWN =
+  /\[([^\]]*)\]\(\s*((?:https?:\/\/)?(?:www\.)?(?:app\.)?demiplane\.com[^)\s]+)\)/gi;
+const DEMIPLANE_HTML =
+  /<a\b[^>]*href=["']((?:https?:\/\/)?(?:www\.)?(?:app\.)?demiplane\.com[^"']+)["'][^>]*>(.*?)<\/a>/gi;
+const DEMIPLANE_BARE = /(?:https?:\/\/)?(?:www\.)?(?:app\.)?demiplane\.com\/[^\s"'<>)]+/gi;
+
+function toAbsoluteHttpUrl(raw) {
+  const cleaned = String(raw ?? "").replace(/&amp;/g, "&").trim();
+  if (!cleaned) return null;
+  try {
+    const url = new URL(cleaned.startsWith("http") ? cleaned : `https://${cleaned.replace(/^\/+/, "")}`);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+export function extractDemiplaneUrl(value) {
+  const text = String(value ?? "");
+  const labeled = [];
+  const unlabeled = [];
+  const seen = new Set();
+
+  const push = (raw, label = "") => {
+    const href = toAbsoluteHttpUrl(raw);
+    if (!href || !/demiplane\.com/i.test(href)) return;
+    const key = href.toLocaleLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    const entry = { href, label: String(label ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() };
+    if (/demiplane/i.test(entry.label)) labeled.push(entry);
+    else unlabeled.push(entry);
+  };
+
+  for (const match of text.matchAll(DEMIPLANE_MARKDOWN)) push(match[2], match[1]);
+  for (const match of text.matchAll(DEMIPLANE_HTML)) push(match[1], match[2]);
+  for (const match of text.matchAll(DEMIPLANE_BARE)) push(match[0]);
+  return (labeled[0] ?? unlabeled[0])?.href ?? null;
+}
+
+export function monsterDemiplaneUrl(block) {
+  return extractDemiplaneUrl(blockLookupText(block));
+}
+
+export function monsterSourceUrl(block) {
+  const existing = toAbsoluteHttpUrl(block?.sourceUrl);
+  if (existing && /demiplane\.com/i.test(existing)) return existing;
+  const demiplane = monsterDemiplaneUrl(block);
+  if (demiplane) return demiplane;
+  if (existing) return existing;
+  const aonPath = monsterAonPath(block);
+  return aonPath ? aonMonsterUrl(aonPath) : null;
+}
+
 export function monsterIdentity(block) {
   const rawTitle = monsterRawTitle(block);
   const fromTitle = parseCreatureIdentity(rawTitle);
@@ -134,5 +189,6 @@ export function monsterIdentity(block) {
     variant,
     rawTitle,
     aonPath: monsterAonPath(block),
+    sourceUrl: monsterSourceUrl(block),
   };
 }

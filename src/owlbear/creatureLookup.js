@@ -146,8 +146,13 @@ export function artUrlFromLocalRow(row) {
 
 export function sourceUrlFromLocalRow(row) {
   if (!row) return null;
+  const demiplane = String(
+    row.DemiplaneUrl ?? row.demiplaneUrl ?? row.demiplane_url ?? row.SourceUrl ?? row.sourceUrl ?? ""
+  ).trim();
+  if (/demiplane\.com/i.test(demiplane)) return demiplane.startsWith("http") ? demiplane : `https://${demiplane.replace(/^\/+/, "")}`;
   const raw = String(row.AonUrl ?? row.aonUrl ?? row.aon_url ?? "").trim();
   if (/aonprd\.com/i.test(raw)) return raw.startsWith("http") ? raw : aonMonsterUrl(raw);
+  if (/demiplane\.com/i.test(raw)) return raw.startsWith("http") ? raw : `https://${raw.replace(/^\/+/, "")}`;
   const aonId = localMonsterAonId(row);
   if (aonId) return aonMonsterUrl(`/Monsters.aspx?ID=${aonId}`);
   return null;

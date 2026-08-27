@@ -29,6 +29,7 @@ import {
 } from "./encounterData.js";
 import { buildTokenFills, contrastingGlyphColors } from "./tokenColors.js";
 import { aonMonsterUrl } from "./aonStatBlock.js";
+import { monsterSourceUrl } from "./creatureIdentity.js";
 import { encounterRuleset, lookupCreatureName } from "./creatureLookup.js";
 import {
   boundsFromCenteredSize,
@@ -57,7 +58,7 @@ function variantLabel(variant) {
 
 function monsterItemDescription(kind, name, block) {
   const summary = kind === "token" ? `AMBA monster token for ${name}` : `AMBA monster stat block for ${name}`;
-  const sourceUrl = String(block?.sourceUrl ?? "").trim();
+  const sourceUrl = String(block?.sourceUrl ?? monsterSourceUrl(block) ?? "").trim();
   return sourceUrl ? `${summary}\n${sourceUrl}` : summary;
 }
 
@@ -308,10 +309,17 @@ async function resolveMonsterGroups(encounter, onStatus = () => {}) {
       if (looked?.level != null) group.block.level = looked.level;
       if (looked?.source) group.block.source = looked.source;
       if (looked?.size) group.block.size = looked.size;
-      if (looked?.sourceUrl) group.block.sourceUrl = looked.sourceUrl;
+      const demiplaneUrl = identity.sourceUrl && /demiplane\.com/i.test(identity.sourceUrl) ? identity.sourceUrl : null;
+      if (demiplaneUrl) group.block.sourceUrl = demiplaneUrl;
+      else if (looked?.sourceUrl) group.block.sourceUrl = looked.sourceUrl;
       else if (identity.aonPath) group.block.sourceUrl = aonMonsterUrl(identity.aonPath);
-      if (group.block.sourceUrl) onStatus(`AoN link for ${displayName}: ${group.block.sourceUrl}`);
-      else onStatus(`No AoN link for ${displayName}.`);
+      else if (identity.sourceUrl) group.block.sourceUrl = identity.sourceUrl;
+      if (group.block.sourceUrl) {
+        const host = /demiplane\.com/i.test(group.block.sourceUrl) ? "Demiplane" : "AoN";
+        onStatus(`${host} link for ${displayName}: ${group.block.sourceUrl}`);
+      } else {
+        onStatus(`No source link for ${displayName}.`);
+      }
       if (looked?.imageUrl) {
         const usable = browserFetchableArtUrl(looked.imageUrl);
         if (usable) {

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { monsterAonPath, monsterIdentity, parseCreatureIdentity } from "./creatureIdentity.js";
+import {
+  extractDemiplaneUrl,
+  monsterAonPath,
+  monsterIdentity,
+  monsterSourceUrl,
+  parseCreatureIdentity,
+} from "./creatureIdentity.js";
 import { extractAonCreaturePath } from "./aonStatBlock.js";
 import { labelBaseForBlocks, labelBaseFromName, numberedLabel } from "./monsterLabels.js";
 
@@ -29,6 +35,40 @@ test("parses leading quantity and elite variant", () => {
     variant: null,
     raw: "Swarm — 6× Nyktera",
   });
+});
+
+test("extracts Demiplane source URL from markdown and html links", () => {
+  const url = "https://app.demiplane.com/nexus/pathfinder2e/bestiary/zombie-shambler";
+  assert.equal(
+    extractDemiplaneUrl(`Source: Beginner Box: Secrets of the Unlit Star - [Demiplane](${url})`),
+    url
+  );
+  assert.equal(extractDemiplaneUrl(`<a href="${url}">Demiplane</a>`), url);
+  assert.equal(
+    monsterSourceUrl({
+      name: "Zombie Shambler (Unlit Star)",
+      statBlock: `5x level -1 Zombie Shamblers Source: Beginner Box: Secrets of the Unlit Star - [Demiplane](${url}) / common Medium Perception +3`,
+    }),
+    url
+  );
+  assert.equal(
+    monsterIdentity({
+      name: "Zombie Shambler (Unlit Star)",
+      statBlock: `Source: Beginner Box • [Demiplane](${url}) Perception +3`,
+    }).sourceUrl,
+    url
+  );
+});
+
+test("Demiplane source wins over an AoN lookup URL already on the block", () => {
+  const demiplane = "https://app.demiplane.com/nexus/pathfinder2e/bestiary/zombie-shambler";
+  assert.equal(
+    monsterSourceUrl({
+      sourceUrl: "https://2e.aonprd.com/Monsters.aspx?ID=123",
+      statBlock: `Source: Unlit Star - [Demiplane](${demiplane})`,
+    }),
+    demiplane
+  );
 });
 
 test("extracts AoN creature path from markdown and html links", () => {
