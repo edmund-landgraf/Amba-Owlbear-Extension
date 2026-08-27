@@ -6,7 +6,7 @@ import { renderStatCardSvgFile } from "./statCardImage.js";
 import { cleanStatText, pf2eStatRows } from "./statCardRows.js";
 import { inferMapGrid } from "./mapGridInference.js";
 import { addItemsToCurrentScene, deleteItemsFromCurrentScene, moveItemsInCurrentScene, unlockAmbaStatCardsInCurrentScene, unlockItemsInCurrentScene } from "./sceneItems.js";
-import { requireOpenScene } from "./sceneService.js";
+import { currentOwlbearSceneId, requireOpenScene } from "./sceneService.js";
 import {
   encounterId,
   encounterMapGrid,
@@ -33,21 +33,19 @@ import { encounterRuleset, lookupCreatureName } from "./creatureLookup.js";
 import {
   boundsFromCenteredSize,
   boundsFromImageInfo,
+  clusterOriginForMap,
   combineBounds,
   getItemListBounds,
-  getSceneBoundsForLayers,
-  imagePositionRightOfBounds,
   lastPlacementFromBounds,
-  nextOriginFromLastPlacement,
+  monsterColumnOrigin,
 } from "./layout.js";
+import { nextClusterOrigin, recordCluster, seedClusterFromBounds } from "./placementTable.js";
 import { labelBaseForBlocks, numberedLabel } from "./monsterLabels.js";
 import {
   encounterItemMetadata,
   findImportedItem,
-  getEncounterSceneMetadata,
+  getAmbaOwnedItems,
   getImportedEncounterItems,
-  isMonsterStagingKind,
-  META,
   saveEncounterSceneMetadata,
 } from "./encounterMetadata.js";
 
@@ -230,7 +228,7 @@ async function applyMapGridToItem(itemId, inferredGrid) {
   });
 }
 
-async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems }) {
+async function buildMapItem({ moduleId, encounter, clusterOrigin, importedItems }) {
   const url = mapUrl(encounter);
   if (!url) return null;
 
@@ -266,7 +264,7 @@ async function buildMapItem({ moduleId, encounter, occupiedBounds, importedItems
 
   const saved = savedMapPlacement(encounter);
   const mapImage = { ...info.image };
-  const stagedPosition = imagePositionRightOfBounds(occupiedBounds, info, 1000);
+  const stagedPosition = clusterOriginForMap(clusterOrigin, info);
   const position = saved?.position
     ? saved.position
     : await mapPositionForGrid(stagedPosition, info.image, inferredGrid);
@@ -555,7 +553,9 @@ async function buildMonsterStagingItems({
         artUrl: includeMonsterArt ? cardArtUrl : null,
         onStatus,
       });
-      placedBounds.push(boundsFromCenteredSize(cardPosition, STAT_CARD_WIDTH, STAT_CARD_HEIGHT));
+      if (!existingCard?.position) {
+        placedBounds.push(boundsFromCenteredSize(cardPosition, STAT_CARD_WIDTH, STAT_CARD_HEIGHT));
+      }
       cardsImported += 1;
     }
 
@@ -593,10 +593,9 @@ export async function addEncounterToCurrentScene({ moduleId, encounter, options 
   onStatus("Reading existing AMBA scene items...");
   const importedItems = await getImportedEncounterItems(moduleId, id);
   await unlockAmbaStatCardsInCurrentScene();
-  const mapLayerBounds = await getSceneBoundsForLayers(["MAP"]);
-  const stagingItems = importedItems.filter((item) => isMonsterStagingKind(item.metadata?.[META.kind]));
-  const existingStagingBounds = await getItemListBounds(stagingItems);
-  const sceneMeta = await getEncounterSceneMetadata();
+  const sceneId = await currentOwlbearSceneId();
+  seedClusterFromBounds(sceneId, await getItemListBounds(await getAmbaOwnedItems()));
+  const clusterOrigin = nextClusterOrigin(sceneId);
   if (importOptions.importMap) {
     onStatus("Preparing encounter map...");
     await applySceneGridFromAmba(encounterMapGrid(encounter));
@@ -605,14 +604,16 @@ export async function addEncounterToCurrentScene({ moduleId, encounter, options 
     ? await buildMapItem({
         moduleId,
         encounter,
-        occupiedBounds: await getSceneBoundsForLayers(["MAP", "CHARACTER"]),
+        clusterOrigin,
         importedItems,
       })
     : null;
   if (map?.item) items.push(map.item);
 
-  const occupiedBounds = combineBounds(mapLayerBounds, map?.bounds, existingStagingBounds);
-  const monsterOrigin = nextOriginFromLastPlacement(sceneMeta?.lastPlacement, occupiedBounds, 400);
+  const monsterOrigin = monsterColumnOrigin(
+    map?.bounds ? { x: map.bounds.min.x, y: map.bounds.min.y } : clusterOrigin,
+    map?.bounds
+  );
   const monsterResult =
     importOptions.importMonsterTokens || importOptions.importStatCards
       ? await buildMonsterStagingItems({
@@ -648,9 +649,11 @@ export async function addEncounterToCurrentScene({ moduleId, encounter, options 
     }
   }
   onStatus("Saving scene metadata...");
-  const lastPlacement = lastPlacementFromBounds(
-    combineBounds(existingStagingBounds, ...(monsterResult.placedBounds ?? []))
-  );
+  const clusterBounds = combineBounds(map?.item ? map.bounds : null, ...(monsterResult.placedBounds ?? []));
+  if (clusterBounds) {
+    recordCluster(sceneId, { encounterId: id, origin: clusterOrigin, bounds: clusterBounds });
+  }
+  const lastPlacement = lastPlacementFromBounds(clusterBounds ?? map?.bounds);
   await saveEncounterSceneMetadata({
     moduleId,
     encounterId: id,

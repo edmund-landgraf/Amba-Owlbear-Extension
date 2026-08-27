@@ -47,6 +47,10 @@ export async function getImportedEncounterItems(moduleId, encounterId) {
   return OBR.scene.items.getItems((item) => hasEncounterIdentity(item, moduleId, encounterId));
 }
 
+export async function getAmbaOwnedItems() {
+  return OBR.scene.items.getItems((item) => Boolean(item.metadata?.[META.moduleId]));
+}
+
 export function isMonsterStagingKind(kind) {
   return kind === "monster-token" || kind === "monster-stat-card" || kind === "monster-stat-card-text";
 }

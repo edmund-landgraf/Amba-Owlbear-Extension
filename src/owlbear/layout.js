@@ -1,5 +1,3 @@
-import OBR from "@owlbear-rodeo/sdk";
-
 export const NS = "com.adventuremakerbyact.owlbear";
 
 export function boundsFromImageInfo(imageInfo, position) {
@@ -45,6 +43,7 @@ export function combineBounds(...boundsList) {
 }
 
 export async function getSceneBoundsForLayers(layers) {
+  const { default: OBR } = await import("@owlbear-rodeo/sdk");
   const items = await OBR.scene.items.getItems((item) => layers.includes(item.layer));
   if (!items.length) return null;
 
@@ -68,11 +67,34 @@ export function gridPosition(index, { startX, startY, columns, gapX, gapY }) {
   };
 }
 
+export const CLUSTER_START = { x: 200, y: 200 };
+export const CLUSTER_COLUMN_GAP = 100;
+export const CLUSTER_OFFSET_GAP = 300;
+
 export function rightOfBounds(bounds, margin = 800) {
-  if (!bounds) return { x: 3600, y: 200 };
+  if (!bounds) return { x: CLUSTER_START.x, y: CLUSTER_START.y };
   return {
     x: bounds.max.x + margin,
     y: bounds.min.y,
+  };
+}
+
+export function clusterOriginForMap(origin, imageInfo) {
+  const start = origin ?? CLUSTER_START;
+  const width = imageInfo.image.width;
+  const height = imageInfo.image.height;
+  return {
+    x: start.x + width / 2,
+    y: start.y + height / 2,
+  };
+}
+
+export function monsterColumnOrigin(origin, mapBounds, gap = CLUSTER_COLUMN_GAP) {
+  const start = origin ?? CLUSTER_START;
+  if (!mapBounds) return { x: start.x, y: start.y };
+  return {
+    x: mapBounds.max.x + gap,
+    y: start.y,
   };
 }
 
@@ -117,6 +139,7 @@ export function nextOriginFromLastPlacement(last, occupiedBounds, margin = 400) 
 export async function getItemListBounds(items) {
   if (!items?.length) return null;
   try {
+    const { default: OBR } = await import("@owlbear-rodeo/sdk");
     const bounds = await OBR.scene.items.getItemBounds(items.map((item) => item.id));
     if (bounds) return bounds;
   } catch {

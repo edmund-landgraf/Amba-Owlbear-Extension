@@ -575,6 +575,15 @@ Exports:
 - `gridPosition(index, options)`
   - Generic grid/staging layout function.
 
+- `CLUSTER_START`, `CLUSTER_COLUMN_GAP`, `CLUSTER_OFFSET_GAP`
+  - First-cluster origin and gaps for the monster column and later imports.
+
+- `clusterOriginForMap(origin, imageInfo)`
+  - Map image center from a cluster top-left origin.
+
+- `monsterColumnOrigin(origin, mapBounds, gap)`
+  - Token/stat-card column origin immediately to the right of the map (or the cluster origin if there is no map).
+
 - `rightOfBounds(bounds, margin)`
   - Finds an origin to the right of existing bounds.
 
@@ -583,11 +592,22 @@ Exports:
 
 Current layout strategy:
 
-- Encounter maps go near `{ x: 600, y: 600 }`.
-- Encounter monster tokens are dumped below the map or below existing map-layer bounds.
-- Character sheet snapshots are docked to the right of map-layer bounds.
+- Each encounter import is one cluster: map at the cluster origin, tokens and stat cards in a column beside the map.
+- An in-memory per-scene table (`placementTable.js`) records each cluster AABB.
+- Later imports on the same scene start to the right of the last recorded cluster.
+- If the table is empty (reload), existing AMBA item bounds seed one synthetic cluster so the next dump does not overlap.
+- The layout does not do tactical placement. The GM still drags tokens onto the map.
 
-The layout deliberately does not do tactical placement yet. The current goal is "dump them and let the user drag."
+### `src/owlbear/placementTable.js`
+
+Session-only cluster origin table keyed by Owlbear scene id.
+
+Exports:
+
+- `resetPlacementTable(sceneId)`
+- `nextClusterOrigin(sceneId)`
+- `recordCluster(sceneId, entry)`
+- `seedClusterFromBounds(sceneId, bounds, encounterId)`
 
 ## Image And Token Modules
 
@@ -767,8 +787,8 @@ Behavior:
 4. If no map is present, inspect existing map-layer bounds.
 5. Build monster token items from encounter monster blocks.
 6. Rasterize SVG monster tokens to PNG object URLs.
-7. Place tokens in a staging grid below the map/map area.
-8. Add all items directly to the current scene.
+7. Place tokens and stat cards in a column immediately to the right of that map.
+8. Record the cluster AABB in the in-memory placement table and add items to the current scene.
 
 Current map import behavior:
 

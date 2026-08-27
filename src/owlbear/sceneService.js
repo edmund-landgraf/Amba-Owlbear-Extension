@@ -55,6 +55,16 @@ function waitForSceneReady(timeoutMs) {
   });
 }
 
+export async function currentOwlbearSceneId() {
+  const id = OBR.scene?.id;
+  if (typeof id === "string" && id) return id;
+  if (typeof OBR.scene?.getId === "function") {
+    const value = await OBR.scene.getId();
+    if (value) return String(value);
+  }
+  return "current";
+}
+
 export async function requireOpenScene() {
   if (await isSceneReady()) return;
   if (await canAccessSceneItems()) return;
