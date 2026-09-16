@@ -154,7 +154,7 @@ function rowFragments(row) {
   const fragments = [];
   if (row.label) fragments.push({ text: row.label + " ", bold: true });
   if (!row.label) {
-    const match = row.value.match(/^(.{1,64}?)(?=\s+(?:>{1,3}|◆{1,3}|◇|↻|↺|Single Action|Two Actions|Three Actions|Free Action|Reaction))/);
+    const match = row.value.match(/^(.{1,64}?)(?=\s+(?:>{1,3}|◆{1,3}|◇|↻|↺|[123]|Single Action|Two Actions|Three Actions|Free Action|Reaction))/);
     if (match) {
       fragments.push({ text: match[1], bold: true }, { text: row.value.slice(match[1].length) });
       return fragments;

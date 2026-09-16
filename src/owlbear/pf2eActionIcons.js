@@ -30,11 +30,12 @@ const ACTION_PHRASE =
   /one\s+to\s+three\s+actions?|three[\s-]+actions?|two[\s-]+actions?|single\s+action|one\s+action|free\s+action/gi;
 const REACTION_PHRASE = /(?<![A-Za-z])Reaction(?![A-Za-z])/g;
 const GLYPH_PHRASE = /(?:^|(?<=\s))(?:>>>|>>|>|◆◆◆|◆◆|◆|◇|↻|↺)(?=\s|$)/g;
+const BARE_ACTION_PHRASE = /(?:^|(?<=\s))[123](?=\s+(?:[A-Z]|\())/g;
 
 function kindFromGlyph(raw) {
-  if (raw === ">>>" || raw === "◆◆◆") return "three";
-  if (raw === ">>" || raw === "◆◆") return "two";
-  if (raw === ">" || raw === "◆") return "one";
+  if (raw === ">>>" || raw === "◆◆◆" || raw === "3") return "three";
+  if (raw === ">>" || raw === "◆◆" || raw === "2") return "two";
+  if (raw === ">" || raw === "◆" || raw === "1") return "one";
   if (raw === "◇") return "free";
   if (raw === "↻" || raw === "↺") return "reaction";
   return "one";
@@ -66,6 +67,24 @@ function decodeHtmlEntities(value) {
   return text;
 }
 
+function previousWord(text, index) {
+  return text.slice(0, index).trimEnd().match(/([A-Za-z][A-Za-z0-9'/-]*)$/)?.[1] ?? "";
+}
+
+function isBareActionMarker(text, index) {
+  if (index === 0) return true;
+  return /^[A-Z]/.test(previousWord(text, index));
+}
+
+function actionMatches(text) {
+  return [
+    ...text.matchAll(ACTION_PHRASE),
+    ...text.matchAll(REACTION_PHRASE),
+    ...text.matchAll(GLYPH_PHRASE),
+    ...text.matchAll(BARE_ACTION_PHRASE).filter((match) => isBareActionMarker(text, match.index ?? 0)),
+  ].sort((left, right) => (left.index ?? 0) - (right.index ?? 0));
+}
+
 export function normalizePf2eActionTokens(value) {
   return decodeHtmlEntities(String(value ?? ""))
     .replace(/\[one-to-three-actions?\]/gi, " One to Three Actions ")
@@ -84,11 +103,7 @@ export function normalizePf2eActionTokens(value) {
 export function tokenizeStatValue(value) {
   const text = normalizePf2eActionTokens(value).replace(/\s+/g, " ").trim();
   if (!text) return [];
-  const matches = [
-    ...text.matchAll(ACTION_PHRASE),
-    ...text.matchAll(REACTION_PHRASE),
-    ...text.matchAll(GLYPH_PHRASE),
-  ].sort((left, right) => (left.index ?? 0) - (right.index ?? 0));
+  const matches = actionMatches(text);
   const tokens = [];
   let cursor = 0;
   for (const match of matches) {
@@ -96,7 +111,7 @@ export function tokenizeStatValue(value) {
     if (start < cursor) continue;
     if (start > cursor) tokens.push({ text: text.slice(cursor, start) });
     const raw = match[0];
-    if (/^[>◆◇↻↺]+$/.test(raw)) {
+    if (/^[123>◆◇↻↺]+$/.test(raw)) {
       tokens.push({ icon: kindFromGlyph(raw) });
     } else {
       const key = raw.replace(/[\s-]+/g, " ").trim().toLocaleLowerCase();
@@ -108,16 +123,33 @@ export function tokenizeStatValue(value) {
   return tokens.filter((token) => token.icon || token.text);
 }
 
+const TRAILING_RIDER_WORDS = new Set(["Grab", "Trip", "Shove", "Disarm", "Grapple", "Knockdown", "Push", "Pull"]);
+
+function namedActionStart(text, actionIndex) {
+  if (actionIndex <= 0) return 0;
+  const before = text.slice(0, actionIndex).trimEnd();
+  const match = before.match(/(?:^|[\s,;])((?:[A-Z][A-Za-z0-9'/-]*\s+){0,5}[A-Z][A-Za-z0-9'/-]*)$/);
+  if (!match) return actionIndex;
+  const words = match[1].trim().split(/\s+/);
+  while (words.length > 1 && TRAILING_RIDER_WORDS.has(words[0])) words.shift();
+  const phrase = words.join(" ");
+  return before.length - phrase.length;
+}
+
+function actionBlockStarts(text) {
+  const starts = new Set([0]);
+  for (const match of actionMatches(text)) {
+    const index = match.index ?? 0;
+    if (index === 0) continue;
+    starts.add(namedActionStart(text, index));
+  }
+  return starts;
+}
+
 export function splitActionBlocks(value) {
   const text = normalizePf2eActionTokens(value).replace(/\s+/g, " ").trim();
   if (!text) return [];
-  const starts = new Set([0]);
-  const glyphStart = /(?:^|(?<=\s))(?=(?:>{1,3}|◆{1,3}|◇|↻|↺)\s+[A-Za-z])/g;
-  const namedStart =
-    /(?<=\s)(?<![A-Z][A-Za-z0-9'/-]*\s)(?=[A-Z][A-Za-z0-9'/-]*(?:\s+[A-Z][A-Za-z0-9'/-]*){0,5}\s+(?:>>|>{1,3}|◆{1,3}|◇|↻|↺)(?=\s|$|\()|(?:Single Action|Two Actions|Three Actions|Free Action|Reaction)\b)/g;
-  for (const match of text.matchAll(glyphStart)) starts.add(match.index ?? 0);
-  for (const match of text.matchAll(namedStart)) starts.add(match.index ?? 0);
-  const indices = [...starts].sort((left, right) => left - right);
+  const indices = [...actionBlockStarts(text)].sort((left, right) => left - right);
   const parts = [];
   for (let index = 0; index < indices.length; index += 1) {
     const chunk = text.slice(indices[index], indices[index + 1]).trim();

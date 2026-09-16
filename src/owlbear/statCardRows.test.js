@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { splitActionBlocks } from "./pf2eActionIcons.js";
-import { pf2eStatRows } from "./statCardRows.js";
+import { cleanStatText, pf2eStatRows } from "./statCardRows.js";
 
 const THORNWICK = [
   "CREATURE 3 [UNCOMMON] [MEDIUM] [INCORPOREAL] [SPIRIT] [UNDEAD]",
@@ -59,4 +59,47 @@ test("splitActionBlocks starts a new block on a capitalized strike glyph", () =>
   assert.equal(parts.length, 2);
   assert.match(parts[0], /Spectral Grasp/);
   assert.match(parts[1], /Draining Wail/);
+});
+test("removes source links before stat labels are parsed", () => {
+  const text = "Skills [Acrobatics](/Skills.aspx?ID=34) +12; [Athletics](https://2e.aonprd.com/Skills.aspx?ID=36) +15";
+  assert.equal(cleanStatText(text), "Skills Acrobatics +12; Athletics +15");
+  assert.deepEqual(pf2eStatRows(text, "Veteran War Horse"), [
+    { label: "Skills", value: "Acrobatics +12; Athletics +15" },
+  ]);
+});
+test("ignores field-like words inside ability prose", () => {
+  const rows = pf2eStatRows("HP 170 Speed 25 feet Melee ◆ claw +18, Damage 2d8+7; Blood Drain ◆ The creature loses HP as it moves at high speed.", "Blood Hag");
+  assert.equal(rows.filter((row) => row.label === "HP").length, 1);
+  assert.equal(rows.filter((row) => row.label === "Speed").length, 1);
+  assert.match(rows.find((row) => /Blood Drain/.test(row.value ?? ""))?.value ?? "", /Blood Drain/);
+});
+
+test("splits PF2 API bare numeric action markers into separate ability rows", () => {
+  const woodWraith = [
+    "Perception +8; low-light vision, tremorsense 30 feet",
+    "Languages Hallit, Sylvan (cannot speak intelligibly; wails in shrieks)",
+    "Skills Acrobatics +6, Athletics +8, Intimidation +8, Nature +8, Stealth +7",
+    "Str +4; Dex +2; Con +3; Int +1; Wis +2; Cha +2",
+    "AC 18; Fort +9, Ref +6, Will +8",
+    "HP 45; Immunities bleed, death effects, disease, paralyzed, poison, unconscious; Weaknesses fire 5; Resistances bludgeoning 3, piercing 3",
+    "Speed 25 feet",
+    "Melee 1 Blood-Antler Gore +10, Damage 1d8+4 piercing plus 1d4 void",
+    "Melee 1 Root Lash +10 (reach 10 ft.), Damage 1d6+4 bludgeoning plus Grab",
+    "Defoliating Shriek 2 (auditory, emotion, fear, mental) The Wood Wraith emits an agonizing screech of splintering wood and dying timber.",
+    "Erupting Roots 2 (primal) Thorny subterranean roots burst up in a 15-foot radius centered on a point within 60 feet.",
+    "Summon Logger Echoes 2 (primal) Frequency once per encounter Effect The Wraith summons the spectral, weeping echoes of dead loggers.",
+  ].join(" ");
+
+  const rows = pf2eStatRows(woodWraith, "Wood Wraith");
+  const meleeRows = rows.filter((row) => row.label === "Melee" || /^\d\s+(?:Blood-Antler|Root Lash)/.test(row.value ?? ""));
+  const defoliating = rows.find((row) => /Defoliating Shriek/.test(row.value ?? ""));
+  const erupting = rows.find((row) => /Erupting Roots/.test(row.value ?? ""));
+  const summon = rows.find((row) => /Summon Logger Echoes/.test(row.value ?? ""));
+
+  assert.equal(meleeRows.length, 2);
+  assert.match(rows.find((row) => row.label === "Melee")?.value ?? "", /Blood-Antler Gore/);
+  assert.doesNotMatch(rows.find((row) => row.label === "Melee")?.value ?? "", /Defoliating Shriek/);
+  assert.match(defoliating?.value ?? "", /^Defoliating Shriek 2/);
+  assert.match(erupting?.value ?? "", /^Erupting Roots 2/);
+  assert.match(summon?.value ?? "", /^Summon Logger Echoes 2/);
 });
