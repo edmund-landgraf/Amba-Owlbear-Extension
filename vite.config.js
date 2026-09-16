@@ -30,80 +30,86 @@ function owlbearManifestEnvName() {
   };
 }
 
+function usePrivateNetworkCors(server) {
+  server.middlewares.use((req, res, next) => {
+    corsHeaders(req, res);
+    if (req.method === "OPTIONS" && req.headers["access-control-request-private-network"]) {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+    next();
+  });
+}
+
+function useGeneratedTokens(server) {
+  server.middlewares.use("/amba-generated-tokens", (req, res) => {
+    corsHeaders(req, res);
+
+    if (req.method === "OPTIONS") {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+
+    if (req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        const id = randomUUID();
+        const contentType = String(req.headers["content-type"] ?? "image/png").toLowerCase();
+        const extension = contentType.includes("svg") ? "svg" : "png";
+        writeFileSync(join(tokenDir, `${id}.${extension}`), Buffer.concat(chunks));
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ id, url: `/amba-generated-tokens/${id}.${extension}` }));
+      });
+      return;
+    }
+
+    if (req.method === "GET" || req.method === "HEAD") {
+      const match = String(req.url ?? "").match(/^\/([a-f0-9-]+)\.(png|svg)(?:\?.*)?$/i);
+      if (!match) {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
+      const [, id, extension] = match;
+      const path = join(tokenDir, `${id}.${extension.toLowerCase()}`);
+      try {
+        const file = readFileSync(path);
+        res.setHeader("Content-Type", extension.toLowerCase() === "svg" ? "image/svg+xml" : "image/png");
+        res.setHeader("Cache-Control", "no-store");
+        res.statusCode = 200;
+        if (req.method === "HEAD") {
+          res.setHeader("Content-Length", String(file.length));
+          res.end();
+          return;
+        }
+        res.end(file);
+      } catch {
+        res.statusCode = 404;
+        res.end();
+      }
+      return;
+    }
+
+    res.statusCode = 405;
+    res.end();
+  });
+}
+
 export default defineConfig({
   plugins: [
     owlbearManifestEnvName(),
     {
       name: "owlbear-local-private-network",
-      configureServer(server) {
-        server.middlewares.use((req, res, next) => {
-          corsHeaders(req, res);
-          if (req.method === "OPTIONS" && req.headers["access-control-request-private-network"]) {
-            res.statusCode = 204;
-            res.end();
-            return;
-          }
-          next();
-        });
-      },
+      configureServer: usePrivateNetworkCors,
+      configurePreviewServer: usePrivateNetworkCors,
     },
     {
       name: "amba-generated-tokens",
-      configureServer(server) {
-        server.middlewares.use("/amba-generated-tokens", (req, res) => {
-          corsHeaders(req, res);
-
-          if (req.method === "OPTIONS") {
-            res.statusCode = 204;
-            res.end();
-            return;
-          }
-
-          if (req.method === "POST") {
-            const chunks = [];
-            req.on("data", (chunk) => chunks.push(chunk));
-            req.on("end", () => {
-              const id = randomUUID();
-              const contentType = String(req.headers["content-type"] ?? "image/png").toLowerCase();
-              const extension = contentType.includes("svg") ? "svg" : "png";
-              writeFileSync(join(tokenDir, `${id}.${extension}`), Buffer.concat(chunks));
-              res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ id, url: `/amba-generated-tokens/${id}.${extension}` }));
-            });
-            return;
-          }
-
-          if (req.method === "GET" || req.method === "HEAD") {
-            const match = String(req.url ?? "").match(/^\/([a-f0-9-]+)\.(png|svg)(?:\?.*)?$/i);
-            if (!match) {
-              res.statusCode = 404;
-              res.end();
-              return;
-            }
-            const [, id, extension] = match;
-            const path = join(tokenDir, `${id}.${extension.toLowerCase()}`);
-            try {
-              const file = readFileSync(path);
-              res.setHeader("Content-Type", extension.toLowerCase() === "svg" ? "image/svg+xml" : "image/png");
-              res.setHeader("Cache-Control", "no-store");
-              res.statusCode = 200;
-              if (req.method === "HEAD") {
-                res.setHeader("Content-Length", String(file.length));
-                res.end();
-                return;
-              }
-              res.end(file);
-            } catch {
-              res.statusCode = 404;
-              res.end();
-            }
-            return;
-          }
-
-          res.statusCode = 405;
-          res.end();
-        });
-      },
+      configureServer: useGeneratedTokens,
+      configurePreviewServer: useGeneratedTokens,
     },
   ],
   server: {
