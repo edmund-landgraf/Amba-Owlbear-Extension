@@ -3,9 +3,10 @@ import { devSmokeEncounter, devSmokeEncounters } from "./devSmokeEncounter.js";
 // All AMBA API calls in the Owlbear extension are routed through this file.
 // Keeping the base URL centralized makes it obvious where the local dev API
 // lives, and gives us one future place to swap localhost for production.
-const AMBA_BASE_URL = import.meta.env.VITE_AMBA_BASE_URL ?? "";
-const AMBA_AUTH_BASE_URL = import.meta.env.VITE_AMBA_BASE_URL || "http://localhost:5190";
-const PF2_API_BASE_URL = (import.meta.env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
+const env = import.meta.env ?? {};
+const AMBA_BASE_URL = env.VITE_AMBA_BASE_URL ?? "";
+const AMBA_AUTH_BASE_URL = env.VITE_AMBA_BASE_URL || "http://localhost:5190";
+const PF2_API_BASE_URL = (env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
 const OWLBEAR_AUTH_TOKEN_KEY = "amba.owlbear.authToken";
 const PF2_ART_UNLOCK_UNTIL_KEY = "amba.pf2.artUnlockedUntil";
 const PF2_ART_COOKIE_MAX_AGE_MS = 12 * 60 * 60 * 1000;

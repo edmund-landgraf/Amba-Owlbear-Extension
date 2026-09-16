@@ -2,7 +2,8 @@ import { aonCreatureIdFromPath, aonMonsterUrl, creatureFromAonHit, pickAonCreatu
 import { browserFetchableArtUrl } from "./imageUtils.js";
 
 const AON_SEARCH_URL = "https://elasticsearch.aonprd.com/aon/_search";
-const LOCAL_PF2_API_BASE_URL = (import.meta.env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
+const env = import.meta.env ?? {};
+const LOCAL_PF2_API_BASE_URL = (env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
 const LOOKUP_TIMEOUT_MS = 3000;
 const AON_SOURCE_FIELDS = [
   "name",

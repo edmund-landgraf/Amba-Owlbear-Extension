@@ -3,7 +3,8 @@ import { authFetchOptionsForUrl } from "../amba/ambaApi.js";
 import { publishTokenPng } from "./tokenHost.js";
 import { svgFileWithEmbeddedTokenFont } from "./tokenSvg.js";
 
-const PF2_API_BASE_URL = (import.meta.env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
+const env = import.meta.env ?? {};
+const PF2_API_BASE_URL = (env.VITE_PF2_API_BASE_URL ?? "http://localhost:3333").replace(/\/+$/, "");
 
 /** AoN image hosts 404 without CORS; rewrite those paths onto the PF2 API origin so site auth can apply. */
 export function browserFetchableArtUrl(url) {
@@ -130,13 +131,19 @@ export async function imageInfoFromUrl(url, filename, fallbackType = "image/png"
   return sceneImageFromFile(file, { dpi, mime: file.type || fallbackType });
 }
 
-export function dataUrlFromFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error(`Unable to encode ${file.name || "image"}`));
-    reader.readAsDataURL(file);
-  });
+export async function dataUrlFromFile(file) {
+  if (typeof FileReader === "function") {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error(`Unable to encode ${file.name || "image"}`));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const type = file.type || "application/octet-stream";
+  return `data:${type};base64,${buffer.toString("base64")}`;
 }
 
 export async function overlayTokenOnImage(

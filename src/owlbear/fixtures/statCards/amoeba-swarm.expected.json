@@ -1,0 +1,114 @@
+{
+  "name": "Amoeba Swarm",
+  "creature": "Creature 1",
+  "traits": [
+    "Large",
+    "Amphibious",
+    "Mindless",
+    "Ooze",
+    "Swarm"
+  ],
+  "source": "Monster Core 2 pg. 240",
+  "rows": [
+    {
+      "label": "Perception",
+      "value": "+3; motion sense 60 feet, no vision",
+      "kind": "field"
+    },
+    {
+      "label": "Skills",
+      "value": "Stealth +1",
+      "kind": "field"
+    },
+    {
+      "label": "Str",
+      "value": "+0",
+      "kind": "field"
+    },
+    {
+      "label": "Dex",
+      "value": "-2",
+      "kind": "field"
+    },
+    {
+      "label": "Con",
+      "value": "+3",
+      "kind": "field"
+    },
+    {
+      "label": "Int",
+      "value": "-5",
+      "kind": "field"
+    },
+    {
+      "label": "Wis",
+      "value": "+0",
+      "kind": "field"
+    },
+    {
+      "label": "Cha",
+      "value": "-5",
+      "kind": "field"
+    },
+    {
+      "label": "Motion Sense",
+      "value": "An amoeba swarm can sense nearby creatures through vibration and air or water movement.",
+      "kind": "passive"
+    },
+    {
+      "label": "AC",
+      "value": "9",
+      "kind": "field"
+    },
+    {
+      "label": "Fort",
+      "value": "+8",
+      "kind": "field"
+    },
+    {
+      "label": "Ref",
+      "value": "+1",
+      "kind": "field"
+    },
+    {
+      "label": "Will",
+      "value": "+3",
+      "kind": "field"
+    },
+    {
+      "label": "HP",
+      "value": "35",
+      "kind": "field"
+    },
+    {
+      "label": "Immunities",
+      "value": "acid, bleed, critical hits, mental, precision, unconscious, visual",
+      "kind": "field"
+    },
+    {
+      "label": "Resistances",
+      "value": "slashing 4, piercing 4",
+      "kind": "field"
+    },
+    {
+      "label": "Weaknesses",
+      "value": "area 3, fire 3, splash damage 3",
+      "kind": "field"
+    },
+    {
+      "label": "Speed",
+      "value": "5 feet, climb 5 feet, swim 10 feet",
+      "kind": "field"
+    },
+    {
+      "label": "Swarming Slither",
+      "value": "Single Action The amoeba swarm slithers over each creature in its space, dealing 1d6 acid damage (DC 14 basic Reflex save). A creature that critically fails is sickened 1.",
+      "kind": "action"
+    },
+    {
+      "label": "Weak Acid",
+      "value": "An amoeba swarm's acid damages only organic material—not metal, stone, or other inorganic substances.",
+      "kind": "passive"
+    }
+  ]
+}

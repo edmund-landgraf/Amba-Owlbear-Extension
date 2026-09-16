@@ -4,6 +4,7 @@ import { publishTokenPng } from "./tokenHost.js";
 import { rasterizedMonsterArtTokenFile, rasterizedMonsterTokenFile } from "./tokenImage.js";
 import { renderStatCardSvgFile } from "./statCardImage.js";
 import { cleanStatText, pf2eStatRows } from "./statCardRows.js";
+import { apiStatCardModel, rawMdStatCardModel, statCardRowsFromModel } from "./statCardModel.js";
 import { inferMapGrid } from "./mapGridInference.js";
 import { addItemsToCurrentScene, deleteItemsFromCurrentScene, moveItemsInCurrentScene, unlockAmbaStatCardsInCurrentScene, unlockItemsInCurrentScene } from "./sceneItems.js";
 import { currentOwlbearSceneId, requireOpenScene } from "./sceneService.js";
@@ -69,7 +70,11 @@ function isNoiseTypeRow(value) {
 function statCardContent(block, { name, count, variant } = {}) {
   const displayName = name ?? monsterName(block);
   const quantity = count ?? monsterCount(block);
-  const rows = pf2eStatRows(monsterStatBlock(block), displayName).filter(
+  const rawStatBlock = monsterStatBlock(block);
+  const model = block?.statCardMonster
+    ? apiStatCardModel(block.statCardMonster)
+    : rawMdStatCardModel(rawStatBlock, displayName);
+  const rows = (model.rows.length ? statCardRowsFromModel(model) : pf2eStatRows(rawStatBlock, displayName)).filter(
     (row) => row.label !== "Type" || !isNoiseTypeRow(row.value)
   );
   const meta = [block.level ? `Level ${block.level}` : "", block.source ? `Source: ${block.source}` : "", block.sourceUrl ?? ""]
@@ -141,7 +146,7 @@ function monsterTypeGroups(encounter) {
 }
 
 const STAT_CARD_WIDTH = 1040;
-const STAT_CARD_HEIGHT = 760;
+const STAT_CARD_HEIGHT = 1040;
 
 async function monsterTokenImage(label, name, color, cells, artUrl, glyphColors) {
   let png = null;
@@ -296,6 +301,13 @@ async function resolveMonsterGroups(encounter, onStatus = () => {}) {
   onStatus(`Resolving ${groups.length} monster type${groups.length === 1 ? "" : "s"}...`);
   await Promise.all(
     groups.map(async (group) => {
+      if (group.block?.resolvedStatBlock) {
+        const displayName = group.block.resolvedName || monsterName(group.block) || "Monster";
+        group.displayName = displayName;
+        group.variant = group.block.resolvedVariant ?? "normal";
+        group.block.resolvedVariant = group.variant;
+        return;
+      }
       const identity = monsterIdentity(group.block);
       const looked = await lookupCreatureName({
         aonPath: identity.aonPath,
@@ -395,11 +407,13 @@ async function pushStatCardItem({
   const artFile = await monsterArtFile(artUrl, name, onStatus);
   onStatus(`Rendering ${name} stat card SVG...`);
   const file = await renderStatCardSvgFile({ ...content, tokenFile, artFile });
+  const cardWidth = file.statCardWidth ?? STAT_CARD_WIDTH;
+  const cardHeight = file.statCardHeight ?? STAT_CARD_HEIGHT;
   const url = await publishTokenPng(file);
   items.push(
     buildImage(
-      { width: STAT_CARD_WIDTH, height: STAT_CARD_HEIGHT, url, mime: "image/svg+xml" },
-      { dpi: gridDpi, offset: { x: STAT_CARD_WIDTH / 2, y: STAT_CARD_HEIGHT / 2 } }
+      { width: cardWidth, height: cardHeight, url, mime: "image/svg+xml" },
+      { dpi: gridDpi, offset: { x: cardWidth / 2, y: cardHeight / 2 } }
     )
       .name(`${name} Stat Card`)
       .description(monsterItemDescription("stat-card", name, block))

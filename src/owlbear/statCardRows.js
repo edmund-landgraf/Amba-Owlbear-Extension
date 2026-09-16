@@ -1,4 +1,5 @@
 import { normalizePf2eActionTokens, splitActionBlocks } from "./pf2eActionIcons.js";
+import { rawMdStatCardModel, statCardRowsFromModel } from "./statCardModel.js";
 
 const STAT_LABELS = [
   "Creature",
@@ -31,11 +32,22 @@ const SAVE_LABELS = new Set(["Fort", "Ref", "Will"]);
 const ACTION_LABELS = new Set(["Melee", "Ranged", "Spells", "Items", "Notes", "Speed"]);
 
 export function cleanStatText(value) {
+  const withoutLinks = stripSourceLinks(String(value ?? ""));
   return tidyStatValue(
-    normalizePf2eActionTokens(String(value ?? ""))
+    normalizePf2eActionTokens(withoutLinks)
       .replace(/<[^>]+>/g, " ")
       .replace(/\*\*/g, "")
   );
+}
+
+function stripSourceLinks(value) {
+  return String(value ?? "")
+    // Preserve labels while removing AoN/Demiplane destinations.
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, " $1 ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, " $1 ")
+    .replace(/https?:\/\/[^\s)]+/gi, " ")
+    .replace(/\/?[A-Za-z0-9._/-]+\.aspx(?:\?[^\s)]+)?/gi, " ")
+    .replace(/\]\([^)]*$/g, " ");
 }
 
 export function tidyStatValue(value) {
@@ -72,6 +84,17 @@ function acNumber(value) {
 
 function joinLabeledModifiers(rows) {
   return rows.map((row) => `${row.label} ${signedModifier(row.value)}`.trim()).join(", ");
+}
+
+function likelyFieldStart(label, value) {
+  const rest = String(value ?? "").trim();
+  if (!rest) return false;
+  if (label === "Creature") return /^\d+\b/i.test(rest);
+  if (["Perception", "Str", "Dex", "Con", "Int", "Wis", "Cha", "Fort", "Ref", "Will"].includes(label)) return /^[+\-−]?\d+\b/.test(rest);
+  if (label === "AC" || label === "HP") return /^\d+\b/.test(rest);
+  if (label === "Speed") return /^(?:\d+\b|land\b|fly\b|swim\b|burrow\b|climb\b)/i.test(rest);
+  if (["Languages", "Skills", "Immunities", "Weaknesses", "Resistances", "Items"].includes(label)) return /^[A-Za-z]/.test(rest);
+  return true;
 }
 
 function stripLeadingName(text, name) {
@@ -127,13 +150,18 @@ function withCreatureHeader(rows, intro) {
 }
 
 export function pf2eStatRows(text, name) {
+  if (/^#{1,3}\s+.*\bCreature\s+[-+]?\d+\b/im.test(String(text ?? ""))) {
+    return statCardRowsFromModel(rawMdStatCardModel(text, name));
+  }
   const trimmed = stripLeadingName(cleanStatText(text), name);
   if (!trimmed) return [];
 
   const labelPattern = new RegExp(`\\b(${STAT_LABELS.join("|")})\\b`, "g");
-  const matches = [...trimmed.matchAll(labelPattern)].filter((match, index) => {
-    if (match[1] !== "Creature") return true;
-    return index === 0 || match.index === 0 || /\s/.test(trimmed[match.index - 1] ?? "");
+  const matches = [...trimmed.matchAll(labelPattern)].filter((match, index, allMatches) => {
+    if (match[1] === "Creature" && !(index === 0 || match.index === 0 || /\s/.test(trimmed[match.index - 1] ?? ""))) return false;
+    const next = allMatches[index + 1];
+    const candidate = trimmed.slice((match.index ?? 0) + match[1].length, next?.index ?? trimmed.length);
+    return likelyFieldStart(match[1], candidate);
   });
 
   if (!matches.length) {

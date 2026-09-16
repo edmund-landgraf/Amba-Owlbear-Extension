@@ -7,9 +7,16 @@
     "dev": "vite",
     "dev:owlbear": "vite --host 0.0.0.0 --port 5196",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:statcards": "node --test src/owlbear/statCardModel.test.js src/owlbear/statCardRows.test.js src/owlbear/statCardImage.test.js",
+    "test:statcards:visual": "node --test src/owlbear/statCardVisual.test.js",
+    "test:statcards:all": "npm run test:statcards && npm run test:statcards:visual",
+    "validate:statcards": "node scripts/validate-stat-cards.mjs"
   },
   "devDependencies": {
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.63.0",
+    "pngjs": "^7.0.0",
     "vite": "^8.1.1"
   },
   "dependencies": {

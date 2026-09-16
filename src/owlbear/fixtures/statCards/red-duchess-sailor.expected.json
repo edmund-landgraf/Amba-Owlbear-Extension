@@ -1,0 +1,88 @@
+{
+  "name": "Red Duchess Sailor",
+  "creature": "Creature 2",
+  "traits": [
+    "Common",
+    "Cn",
+    "Medium",
+    "Seafarers"
+  ],
+  "source": "They Watched the Stars",
+  "rows": [
+    {
+      "label": "Perception",
+      "value": "+6",
+      "kind": "field"
+    },
+    {
+      "label": "Languages",
+      "value": "Common",
+      "kind": "field"
+    },
+    {
+      "label": "Skills",
+      "value": "Acrobatics +7, Athletics +8, Deception +6, Intimidation +6, Sailing Lore +8",
+      "kind": "field"
+    },
+    {
+      "label": "Str",
+      "value": "+2",
+      "kind": "field"
+    },
+    {
+      "label": "Dex",
+      "value": "+3",
+      "kind": "field"
+    },
+    {
+      "label": "Con",
+      "value": "+1",
+      "kind": "field"
+    },
+    {
+      "label": "Int",
+      "value": "+0",
+      "kind": "field"
+    },
+    {
+      "label": "Wis",
+      "value": "+2",
+      "kind": "field"
+    },
+    {
+      "label": "AC",
+      "value": "18",
+      "kind": "field"
+    },
+    {
+      "label": "Fort",
+      "value": "+7",
+      "kind": "field"
+    },
+    {
+      "label": "Ref",
+      "value": "+8",
+      "kind": "field"
+    },
+    {
+      "label": "Will",
+      "value": "+6",
+      "kind": "field"
+    },
+    {
+      "label": "HP",
+      "value": "32",
+      "kind": "field"
+    },
+    {
+      "label": "Speed",
+      "value": "25 feet",
+      "kind": "field"
+    },
+    {
+      "label": "Items",
+      "value": "cutlass (functions as a scimitar), dagger, padded armor",
+      "kind": "field"
+    }
+  ]
+}

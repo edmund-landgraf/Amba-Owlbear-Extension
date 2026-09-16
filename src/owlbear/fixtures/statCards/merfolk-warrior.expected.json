@@ -1,0 +1,109 @@
+{
+  "name": "Merfolk Warrior",
+  "creature": "Creature 1",
+  "traits": [
+    "N",
+    "Medium",
+    "Aquatic",
+    "Humanoid",
+    "Merfolk"
+  ],
+  "source": "Bestiary pg. 235",
+  "rows": [
+    {
+      "label": "Perception",
+      "value": "+6; low-light vision",
+      "kind": "field"
+    },
+    {
+      "label": "Languages",
+      "value": "Aquan, Common",
+      "kind": "field"
+    },
+    {
+      "label": "Skills",
+      "value": "Athletics +5, Medicine +4",
+      "kind": "field"
+    },
+    {
+      "label": "Str",
+      "value": "+2",
+      "kind": "field"
+    },
+    {
+      "label": "Dex",
+      "value": "+4",
+      "kind": "field"
+    },
+    {
+      "label": "Con",
+      "value": "+1",
+      "kind": "field"
+    },
+    {
+      "label": "Int",
+      "value": "+0",
+      "kind": "field"
+    },
+    {
+      "label": "Wis",
+      "value": "+1",
+      "kind": "field"
+    },
+    {
+      "label": "Cha",
+      "value": "+1",
+      "kind": "field"
+    },
+    {
+      "label": "Items",
+      "value": "Trident (2)",
+      "kind": "field"
+    },
+    {
+      "label": "AC",
+      "value": "18",
+      "kind": "field"
+    },
+    {
+      "label": "Fort",
+      "value": "+6",
+      "kind": "field"
+    },
+    {
+      "label": "Ref",
+      "value": "+9",
+      "kind": "field"
+    },
+    {
+      "label": "Will",
+      "value": "+4",
+      "kind": "field"
+    },
+    {
+      "label": "HP",
+      "value": "19",
+      "kind": "field"
+    },
+    {
+      "label": "Speed",
+      "value": "5 feet, swim 30 feet",
+      "kind": "field"
+    },
+    {
+      "label": "Melee",
+      "value": "Single Action trident +7; Damage 1d8+2 piercing",
+      "kind": "field"
+    },
+    {
+      "label": "Ranged",
+      "value": "Single Action trident +9 ( thrown 20 feet ); Damage 1d8+2 piercing",
+      "kind": "field"
+    },
+    {
+      "label": "Aquatic Dash",
+      "value": "Two Actions The merfolk warrior swims and attacks in one of two patterns. They either Swim twice and Strike one opponent at the end of their movement, or Swim once and Strike at any point during their movement.",
+      "kind": "action"
+    }
+  ]
+}

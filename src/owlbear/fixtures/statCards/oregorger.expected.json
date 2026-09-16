@@ -1,0 +1,127 @@
+{
+  "name": "Oregorger",
+  "creature": "Creature 11",
+  "traits": [
+    "Large",
+    "Elemental",
+    "Metal"
+  ],
+  "source": "Rage of Elements pg. 158",
+  "rows": [
+    {
+      "label": "Perception",
+      "value": "+18; darkvision, rust vision",
+      "kind": "field"
+    },
+    {
+      "label": "Languages",
+      "value": "Talican",
+      "kind": "field"
+    },
+    {
+      "label": "Skills",
+      "value": "Acrobatics +17, Athletics +25",
+      "kind": "field"
+    },
+    {
+      "label": "Str",
+      "value": "+8",
+      "kind": "field"
+    },
+    {
+      "label": "Dex",
+      "value": "+2",
+      "kind": "field"
+    },
+    {
+      "label": "Con",
+      "value": "+7",
+      "kind": "field"
+    },
+    {
+      "label": "Int",
+      "value": "-1",
+      "kind": "field"
+    },
+    {
+      "label": "Wis",
+      "value": "+3",
+      "kind": "field"
+    },
+    {
+      "label": "Cha",
+      "value": "+3",
+      "kind": "field"
+    },
+    {
+      "label": "Rust Vision",
+      "value": "An oregorger ignores the concealed condition from rust clouds.",
+      "kind": "passive"
+    },
+    {
+      "label": "AC",
+      "value": "30",
+      "kind": "field"
+    },
+    {
+      "label": "Fort",
+      "value": "+24",
+      "kind": "field"
+    },
+    {
+      "label": "Ref",
+      "value": "+17",
+      "kind": "field"
+    },
+    {
+      "label": "Will",
+      "value": "+20",
+      "kind": "field"
+    },
+    {
+      "label": "HP",
+      "value": "245",
+      "kind": "field"
+    },
+    {
+      "label": "Immunities",
+      "value": "bleed, paralyzed, poison, sleep",
+      "kind": "field"
+    },
+    {
+      "label": "Resistances",
+      "value": "acid 10, electricity 10",
+      "kind": "field"
+    },
+    {
+      "label": "Caustic Rust",
+      "value": "( acid, aura ) 5 feet. The oregorger continually leaks tiny fragments of partially digested rust into the air around it. Any creature that ends its turn in the aura takes 2d6 acid damage with a DC 27 basic Reflex save. A creature that critically fails is also sickened 1.",
+      "kind": "passive"
+    },
+    {
+      "label": "Speed",
+      "value": "30 feet, burrow 20 feet, fly 20 feet",
+      "kind": "field"
+    },
+    {
+      "label": "Melee",
+      "value": "Single Action adamantine bite +23 ( reach 10 feet ); Damage 2d12+12 piercing plus devour metal",
+      "kind": "field"
+    },
+    {
+      "label": "Melee",
+      "value": "Single Action claw +23 ( Agile ); Damage 2d6+12 slashing",
+      "kind": "field"
+    },
+    {
+      "label": "Devour Metal",
+      "value": "Any time the oregorger scores a critical hit with an adamantine bite attack, it deals the same amount of damage to any metal armor worn by the target, automatically bypassing any Hardness lower than 10. If a creature uses the Shield Block reaction with a metal shield against an oregorger's adamantine bite, the shield is automatically broken, but no other item takes damage from that attack. Unattended metal items automatically take full damage from an oregorger's adamantine bite attack, ignoring their Hardness if it's lower than 10.",
+      "kind": "action"
+    },
+    {
+      "label": "Searing Spew",
+      "value": "Two Actions ( Acid ) The oregorger belches forth a cloud of caustic, rusted debris from its maw, filling a cube adjacent to itself that's 10 feet on each side. Any creature in this area takes 6d6 acid damage and 6d6 slashing damage (DC 30 basic Reflex). The ground under the cloud is difficult terrain for 1 hour, after which the shrapnel crumbles to dust. The oregorger can't use Searing Spew again for 1d4 rounds, but the ability recharges if the oregorger damages an item with devour metal.",
+      "kind": "action"
+    }
+  ]
+}

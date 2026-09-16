@@ -1,0 +1,81 @@
+{
+  "name": "Xulgath Warrior (Unlit Star)",
+  "creature": "Creature 1",
+  "traits": [
+    "Common",
+    "Medium"
+  ],
+  "source": "Beginner Box: Secrets of the Unlit Star",
+  "rows": [
+    {
+      "label": "Perception",
+      "value": "+6; darkvision",
+      "kind": "field"
+    },
+    {
+      "label": "Skills",
+      "value": "Athletics +7, Stealth +5",
+      "kind": "field"
+    },
+    {
+      "label": "Str",
+      "value": "+4",
+      "kind": "field"
+    },
+    {
+      "label": "Dex",
+      "value": "+2",
+      "kind": "field"
+    },
+    {
+      "label": "Con",
+      "value": "+3",
+      "kind": "field"
+    },
+    {
+      "label": "Int",
+      "value": "-1",
+      "kind": "field"
+    },
+    {
+      "label": "Wis",
+      "value": "+1",
+      "kind": "field"
+    },
+    {
+      "label": "Cha",
+      "value": "+0",
+      "kind": "field"
+    },
+    {
+      "label": "AC",
+      "value": "14",
+      "kind": "field"
+    },
+    {
+      "label": "Fort",
+      "value": "+8",
+      "kind": "field"
+    },
+    {
+      "label": "Ref",
+      "value": "+7",
+      "kind": "field"
+    },
+    {
+      "label": "Will",
+      "value": "+4",
+      "kind": "field"
+    },
+    {
+      "label": "HP",
+      "value": "21",
+      "kind": "field"
+    },
+    {
+      "label": "Items",
+      "value": "club, javelin (3)",
+      "kind": "field"
+    }
+  ]
+}
