@@ -7,23 +7,23 @@ The project is currently focused on the modern Owlbear Rodeo extension model. Ow
 ## Current Capabilities
 
 - Loads as an Owlbear Rodeo action popover.
-- Authenticates to AMBA from inside Owlbear with **Connect AMBA** (popup + Bearer token). Cookie session auth still works when AMBA is same-origin via the Vite proxy.
-- Lists `{current-user}` modules and loads PCs, character sheet images, and encounter containers.
-- Browses encounters by **Act → Scene → Encounter**.
+- Connects to a local AMBA API during development.
+- Lists modules for the authenticated AMBA user.
 - Loads AMBA encounters from real endpoints when available, with a smoke-fixture fallback for local testing.
 - Analyzes the selected encounter before export:
   - map present or missing
   - map image dimensions and MIME type
-  - grid metadata: pixels per square, square counts, `1 square = 5 ft`
-  - grid source: AMBA metadata, measured from map grid lines, or a 140px/square fallback
-  - map/grid warnings when dpi axes or cell size disagree
-  - monster block count and planned monster token count
-- Imports encounter maps into the current Owlbear scene, using inferred or explicit grid dpi and offset.
+  - grid metadata such as pixels per square and `1 square = 5 ft`
+  - monster block count
+  - planned monster token count
+- Imports encounter maps into the current Owlbear scene.
 - Generates numbered monster tokens such as `Gb1`, `Gb2`, `Gi1`.
-- Rasterizes SVG token art and monster stat cards to PNG before scene placement.
-- Preserves existing AMBA-created maps, tokens, and cards on re-import through metadata-based upsert behavior.
-- Can optionally push PC tokens, notes, and character sheet images.
-- Can save map and monster token placements back to AMBA when that endpoint exists.
+- Rasterizes SVG token art before scene placement.
+- Exports monster stat blocks as Owlbear note/card items.
+- Preserves existing AMBA-created token positions on re-import through metadata-based upsert behavior.
+- Can clear the current scene and rebuild from the selected or queued encounter.
+- Can optionally push PC tokens.
+- Includes a placement-save client path for future AMBA persistence.
 
 ## What This Is Not
 
@@ -62,21 +62,13 @@ The manifest URL for Owlbear Rodeo is:
 http://localhost:5196/manifest.json
 ```
 
-The Vite dev server proxies `/api` and `/uploads` to:
+The Vite dev server proxies AMBA API and upload requests to:
 
 ```text
 http://localhost:5190
 ```
 
-AMBA must be running separately for real module/encounter data.
-
-### Authentication
-
-Because the extension runs in an Owlbear iframe, cookie login in another tab is often not enough. Use **Connect AMBA** in the popover. AMBA opens `/api/owlbear/extension/auth/start`, then posts a token back to the extension. After that, API calls use `Authorization: Bearer …` and the `/api/owlbear/extension/...` routes.
-
-Optional: set `VITE_AMBA_BASE_URL` if AMBA is not reached through the Vite proxy.
-
-The extension still includes a local smoke fallback for the `Owlbear Smoke Mini Spine` fixture when authenticated AMBA encounter endpoints are unavailable.
+AMBA must be running separately for real module/encounter data. Log in to AMBA in the same browser profile before opening the Owlbear extension so authenticated API requests can use the AMBA session. The extension includes a local smoke fallback for the `Owlbear Smoke Mini Spine` fixture so the encounter UI can still be exercised when authenticated AMBA encounter endpoints are unavailable.
 
 ## Loading In Owlbear Rodeo
 
@@ -85,10 +77,9 @@ The extension still includes a local smoke fallback for the `Owlbear Smoke Mini 
 3. Add a custom extension using `http://localhost:5196/manifest.json`.
 4. Open a room and scene.
 5. Click the AMBA action icon.
-6. Click **Connect AMBA**, then **Test AMBA Auth**.
-7. Select a module, then Act, Scene, and Encounter.
-8. Review the encounter export analysis.
-9. Choose export options and import.
+6. Select a module and encounter.
+7. Review the encounter export analysis.
+8. Choose export options and import.
 
 See [docs/loading-extension.md](docs/loading-extension.md) for the detailed loading guide.
 
@@ -99,13 +90,9 @@ The extension currently exposes these import controls:
 - Push map
 - Push monster tokens
 - Push monster stat cards
-- Include monster art on stat cards
-- Make token art from monster art, with the token label rendered as Owlbear token text
 - Push PC tokens
 
-After import, **Save map and token placements to AMBA** writes current map and monster-token positions back to AMBA.
-
-AMBA queue items can also carry `exportOptions`, allowing a future AMBA-side Owlbear page to decide what the extension should push when a GM adds an encounter to the Owlbear queue.
+AMBA queue items can also carry `exportOptions`, allowing the future AMBA-side Owlbear page to decide what the extension should push when a GM adds an encounter to the Owlbear queue.
 
 ## Production Hosting
 
@@ -127,8 +114,8 @@ public/
 
 src/
   app/                      App bootstrap
-  amba/                     AMBA API client, auth bridge, encounter analysis/controls
-  owlbear/                  Owlbear SDK item builders, grid inference, import logic
+  amba/                     AMBA API client, encounter controls, queue controls
+  owlbear/                  Owlbear SDK item builders and import logic
   ui/                       Small DOM shell
 
 docs/
@@ -136,7 +123,6 @@ docs/
   loading-extension.md      Local Owlbear loading instructions
   linux-production-hosting.md
   amba-owlbear-settings-page.md
-  amba-owlbear-configuration-flow.md
   placement-sync-upsert-guide.md
   owlbear-api-docs-review.md
 ```
@@ -145,7 +131,6 @@ docs/
 
 - [Architecture](docs/architecture.md)
 - [AMBA Owlbear settings page](docs/amba-owlbear-settings-page.md)
-- [AMBA Owlbear configuration flow](docs/amba-owlbear-configuration-flow.md)
 - [Owlbear API docs review](docs/owlbear-api-docs-review.md)
 - [Placement sync and upsert guide](docs/placement-sync-upsert-guide.md)
 - [Player join/token control test](docs/player-join-token-control-test.md)
@@ -156,8 +141,8 @@ Near-term work:
 
 - Add real AMBA Owlbear export queue endpoints.
 - Add AMBA-side Owlbear settings/configuration page.
-- Finish AMBA persistence for saved Owlbear placements and apply them on later imports.
-- Add player handout export.
+- Persist Owlbear token placements back into AMBA.
+- Apply saved placements during future encounter imports.
 - Add role/permission checks through Owlbear player and room APIs.
 - Add Owlbear notifications, queue badge count, and viewport focus after import.
 - Harden map/grid validation and production CORS checks.
