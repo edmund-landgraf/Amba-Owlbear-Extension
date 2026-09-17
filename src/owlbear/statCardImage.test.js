@@ -49,7 +49,7 @@ test("renders a real Sea Hag fixture in the compact PF2 reference layout", async
   assert.match(svg, /id="stat-card-creature"/);
   assert.match(svg, /id="stat-card-traits"/);
   assert.match(svg, /<tspan font-weight="700"[^>]*>Dread<\/tspan>/);
-  assert.match(svg, /scale\(/);
+  assert.match(svg, /<circle[^>]+fill="#4d4a45"/);
   assert.doesNotMatch(svg, /aspx|aonprd\.com|demiplane\.com/i);
   assert.equal((svg.match(/>HP</g) ?? []).length, 1);
   assert.equal((svg.match(/>Speed</g) ?? []).length, 1);

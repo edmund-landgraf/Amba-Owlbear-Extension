@@ -145,7 +145,7 @@ function monsterTypeGroups(encounter) {
   return [...groups.values()];
 }
 
-const STAT_CARD_WIDTH = 1040;
+const STAT_CARD_WIDTH = 1400;
 const STAT_CARD_HEIGHT = 1040;
 
 async function monsterTokenImage(label, name, color, cells, artUrl, glyphColors) {

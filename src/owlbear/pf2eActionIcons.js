@@ -163,6 +163,14 @@ export function iconLayoutSize(fontSize) {
 }
 
 export function actionIconGroup(kind, x, y, size) {
+  const number = kind === "one" ? "1" : kind === "two" ? "2" : kind === "three" ? "3" : kind === "variable" ? "1-3" : "";
+  if (number) {
+    const radius = size * 0.44;
+    const cx = x + radius;
+    const cy = y + radius;
+    const fontSize = kind === "variable" ? size * 0.38 : size * 0.62;
+    return `<g><circle cx="${cx}" cy="${cy}" r="${radius}" fill="#4d4a45"/><text x="${cx}" y="${cy + fontSize * 0.36}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="700" fill="#fffdf7">${number}</text></g>`;
+  }
   const markup = ACTION_ICON_MARKUP[kind];
   if (!markup) return "";
   const scale = size / 18;
