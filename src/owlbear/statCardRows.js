@@ -30,6 +30,12 @@ const STAT_LABELS = [
 const ABILITY_LABELS = new Set(["Str", "Dex", "Con", "Int", "Wis", "Cha"]);
 const SAVE_LABELS = new Set(["Fort", "Ref", "Will"]);
 const ACTION_LABELS = new Set(["Melee", "Ranged", "Spells", "Items", "Notes", "Speed"]);
+const SPELLCASTING_LABEL_PATTERN =
+  "(?:(?:Arcane|Divine|Occult|Primal|Prepared|Spontaneous|Innate|Focus|Ritual|Constant|Cantrips?)\\s+){1,4}Spells";
+
+function isActionLabel(label) {
+  return ACTION_LABELS.has(label) || /\bSpells$/i.test(label);
+}
 
 export function cleanStatText(value) {
   const withoutLinks = stripSourceLinks(String(value ?? ""));
@@ -93,6 +99,7 @@ function likelyFieldStart(label, value) {
   if (["Perception", "Str", "Dex", "Con", "Int", "Wis", "Cha", "Fort", "Ref", "Will"].includes(label)) return /^[+\-−]?\d+\b/.test(rest);
   if (label === "AC" || label === "HP") return /^\d+\b/.test(rest);
   if (label === "Speed") return /^(?:\d+\b|land\b|fly\b|swim\b|burrow\b|climb\b)/i.test(rest);
+  if (/\bSpells$/i.test(label)) return /^(?:DC\s*\d+|\d+(?:st|nd|rd|th)\b|cantrips?\b|constant\b|focus\b)/i.test(rest);
   if (["Languages", "Skills", "Immunities", "Weaknesses", "Resistances", "Items"].includes(label)) return /^[A-Za-z]/.test(rest);
   return true;
 }
@@ -156,7 +163,8 @@ export function pf2eStatRows(text, name) {
   const trimmed = stripLeadingName(cleanStatText(text), name);
   if (!trimmed) return [];
 
-  const labelPattern = new RegExp(`\\b(${STAT_LABELS.join("|")})\\b`, "g");
+  // TODO: Unify this parser with the pf2statblock/svgtoken codebase once the extensions share a package.
+  const labelPattern = new RegExp(`\\b(${SPELLCASTING_LABEL_PATTERN}|${STAT_LABELS.join("|")})\\b`, "g");
   const matches = [...trimmed.matchAll(labelPattern)].filter((match, index, allMatches) => {
     if (match[1] === "Creature" && !(index === 0 || match.index === 0 || /\s/.test(trimmed[match.index - 1] ?? ""))) return false;
     const next = allMatches[index + 1];
@@ -196,16 +204,38 @@ export function pf2eStatRows(text, name) {
 function expandActionRows(rows) {
   const expanded = [];
   for (const row of rows) {
-    if (!ACTION_LABELS.has(row.label)) {
+    if (!isActionLabel(row.label)) {
       expanded.push(row);
       continue;
     }
-    const parts = splitActionBlocks(row.value);
+    const parts = /\bSpells$/i.test(row.label) ? splitSpellcastingBlocks(row.value) : splitActionBlocks(row.value);
     parts.forEach((value, index) => {
       expanded.push({ label: index === 0 ? row.label : "", value: tidyStatValue(value) });
     });
   }
   return expanded;
+}
+
+function splitSpellcastingBlocks(value) {
+  const text = normalizePf2eActionTokens(value).replace(/\s+/g, " ").trim();
+  if (!text) return [];
+
+  const actionMarker = /(?:>>|>{1,3}|◆{1,3}|◇|↻|↺|Single Action|Two Actions|Three Actions|Free Action|Reaction)/g;
+  const match = [...text.matchAll(actionMarker)].find((candidate) => (candidate.index ?? 0) > 0);
+  if (!match) return [text];
+
+  const beforeMarker = text.slice(0, match.index).trimEnd();
+  if (!/\b(?:DC\s*\d+|\d+(?:st|nd|rd|th)\b|cantrips?\b|constant\b|focus\b)/i.test(beforeMarker)) {
+    return splitActionBlocks(text);
+  }
+
+  const nameMatch = beforeMarker.match(/(?:^|\s)([A-Z][A-Za-z0-9'/-]*(?:\s+[A-Z][A-Za-z0-9'/-]*)?)$/);
+  if (!nameMatch) return [text];
+
+  const actionStart = beforeMarker.length - nameMatch[1].length;
+  const spellList = text.slice(0, actionStart).trim();
+  const action = text.slice(actionStart).trim();
+  return [spellList, ...splitActionBlocks(action)].filter(Boolean);
 }
 
 function combineAbilityAndSaveRows(rows) {

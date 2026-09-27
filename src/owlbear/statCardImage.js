@@ -156,6 +156,17 @@ function displayRows(rows) {
       result.push({ label: "", value: value.replace(/,\s*(?=(?:Str|Dex|Con|Int|Wis|Cha)\b)/g, "; "), kind: "abilities" });
       continue;
     }
+    if (/\bSpells$/i.test(label) && value.includes(",")) {
+      const parts = value.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean);
+      parts.forEach((part, index) => {
+        result.push({
+          label: index === 0 ? label : "",
+          value: part,
+          kind: row.kind ?? label.toLocaleLowerCase(),
+        });
+      });
+      continue;
+    }
     result.push({ label, value, kind: row.kind ?? (label ? label.toLocaleLowerCase() : "ability") });
   }
   return result;

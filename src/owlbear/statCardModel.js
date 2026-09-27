@@ -6,6 +6,10 @@ const FIELD_LABELS = new Set([
   "Speed", "Melee", "Ranged", "Items", "Spells",
 ]);
 
+function isFieldLabel(label) {
+  return FIELD_LABELS.has(label) || /\bSpells$/i.test(label);
+}
+
 export function tidyStatValue(value) {
   return String(value ?? "")
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
@@ -57,7 +61,9 @@ function readableValue(value) {
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") return readableValue(parsed);
-  } catch { /* ordinary text */ }
+  } catch {
+    // Plain stat text, not JSON.
+  }
   return raw;
 }
 
@@ -104,9 +110,10 @@ export function apiStatCardModel(row) {
   const structured = structuredStatCardModel(row);
   const raw = rawMdStatCardModel(row?.RawMD ?? row?.rawMD, row?.Name ?? row?.name);
   if (!raw.rows.length) return structured;
-  const details = raw.rows.filter((entry) => entry.kind !== "field" || ["Melee", "Ranged", "Spells"].includes(entry.label));
+  const details = raw.rows.filter((entry) => entry.kind !== "field" || ["Melee", "Ranged"].includes(entry.label) || /\bSpells$/i.test(entry.label));
   return { ...structured, rows: [...structured.rows, ...details] };
 }
+
 function rawCreatureStart(lines) {
   return lines.findIndex((line) => /^#{1,3}\s+.*\bCreature\s+[-+]?\d+\b/i.test(line));
 }
@@ -144,23 +151,33 @@ export function rawMdStatCardModel(rawMd, fallbackName) {
   for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index];
     if (index > start + 1 && /^#{1,3}\s+/.test(line)) break;
-    if (/^\s*---\s*$/.test(line)) { flush(); continue; }
+    if (/^\s*---\s*$/.test(line)) {
+      flush();
+      continue;
+    }
     if (!line.trim()) continue;
     const bullet = beforeSource && line.match(/^\s*-\s+(.+)$/);
-    if (bullet) { traits.push(titleCase(cleanInline(bullet[1]))); continue; }
+    if (bullet) {
+      traits.push(titleCase(cleanInline(bullet[1])));
+      continue;
+    }
     const bold = line.match(/^\s*\*\*([^*]+)\*\*\s*(.*)$/);
     if (bold) {
       const label = cleanInline(bold[1]);
       const value = cleanInline(bold[2]);
-      if (/^Source$/i.test(label)) { flush(); source = value; beforeSource = false; continue; }
+      if (/^Source$/i.test(label)) {
+        flush();
+        source = value;
+        beforeSource = false;
+        continue;
+      }
       beforeSource = false;
       if (/^Damage$/i.test(label) && pending && /^(Melee|Ranged)$/i.test(pending.label)) {
         pending.value = `${pending.value}${pending.value ? "; " : ""}Damage ${value}`;
         continue;
       }
       flush();
-      const normalized = /^.+Spells$/i.test(label) ? "Spells" : label;
-      pending = { label: normalized, value, kind: FIELD_LABELS.has(normalized) ? "field" : actionKind(value) };
+      pending = { label, value, kind: isFieldLabel(label) ? "field" : actionKind(value) };
       continue;
     }
     const text = cleanInline(line);
@@ -181,19 +198,39 @@ function combineRows(rows) {
   let abilities = [];
   let saves = [];
   let ac = null;
-  const flushAbilities = () => { if (abilities.length) output.push({ label: "Abilities", value: abilities.map((row) => `${row.label} ${modifier(row.value)}`).join(", "), kind: "field" }); abilities = []; };
+  const flushAbilities = () => {
+    if (abilities.length) output.push({ label: "Abilities", value: abilities.map((row) => `${row.label} ${modifier(row.value)}`).join(", "), kind: "field" });
+    abilities = [];
+  };
   const flushDefense = () => {
     const saveValue = saves.map((row) => `${row.label} ${modifier(row.value)}`).join(", ");
     if (ac || saveValue) output.push({ label: "AC", value: [ac ? tidyStatValue(ac.value).match(/^\d+/)?.[0] ?? tidyStatValue(ac.value) : "", saveValue].filter(Boolean).join("; "), kind: "field" });
-    ac = null; saves = [];
+    ac = null;
+    saves = [];
   };
   for (const row of rows) {
-    if (ABILITY_LABELS.has(row.label)) { flushDefense(); abilities.push(row); continue; }
-    if (row.label === "AC") { flushAbilities(); flushDefense(); ac = row; continue; }
-    if (SAVE_LABELS.has(row.label)) { flushAbilities(); saves.push(row); continue; }
-    flushAbilities(); flushDefense(); output.push(row);
+    if (ABILITY_LABELS.has(row.label)) {
+      flushDefense();
+      abilities.push(row);
+      continue;
+    }
+    if (row.label === "AC") {
+      flushAbilities();
+      flushDefense();
+      ac = row;
+      continue;
+    }
+    if (SAVE_LABELS.has(row.label)) {
+      flushAbilities();
+      saves.push(row);
+      continue;
+    }
+    flushAbilities();
+    flushDefense();
+    output.push(row);
   }
-  flushAbilities(); flushDefense();
+  flushAbilities();
+  flushDefense();
   return output;
 }
 
