@@ -13,7 +13,7 @@ function isFieldLabel(label) {
 export function tidyStatValue(value) {
   return String(value ?? "")
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/[，、]/g, ",")
+    .replace(/[\uFF0C\u3001]/g, ",")
     .replace(/\s+([,.;:])/g, "$1")
     .replace(/,{2,}/g, ",")
     .replace(/;{2,}/g, ";")
