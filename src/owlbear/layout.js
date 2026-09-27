@@ -1,3 +1,5 @@
+import OBR from "@owlbear-rodeo/sdk";
+
 export const NS = "com.adventuremakerbyact.owlbear";
 
 export function boundsFromImageInfo(imageInfo, position) {
@@ -43,7 +45,6 @@ export function combineBounds(...boundsList) {
 }
 
 export async function getSceneBoundsForLayers(layers) {
-  const { default: OBR } = await import("@owlbear-rodeo/sdk");
   const items = await OBR.scene.items.getItems((item) => layers.includes(item.layer));
   if (!items.length) return null;
 
@@ -139,7 +140,6 @@ export function nextOriginFromLastPlacement(last, occupiedBounds, margin = 400) 
 export async function getItemListBounds(items) {
   if (!items?.length) return null;
   try {
-    const { default: OBR } = await import("@owlbear-rodeo/sdk");
     const bounds = await OBR.scene.items.getItemBounds(items.map((item) => item.id));
     if (bounds) return bounds;
   } catch {
