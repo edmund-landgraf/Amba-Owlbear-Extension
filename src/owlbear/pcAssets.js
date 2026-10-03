@@ -84,6 +84,8 @@ export async function generatedTokenUpload(moduleId, moduleTitle, pc, color = TO
     .description(`AMBA generated token for ${pc.name} from ${moduleTitle}`)
     .grid({ dpi: 512, offset: { x: 256, y: 256 } })
     .plainText(pc.name)
+    .textFillColor(color)
+    .textFillOpacity(0)
     .build();
 }
 

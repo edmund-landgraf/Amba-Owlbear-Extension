@@ -45,6 +45,7 @@ import { nextClusterOrigin, recordCluster, seedClusterFromBounds } from "./place
 import { labelBaseForBlocks, numberedLabel } from "./monsterLabels.js";
 import {
   encounterItemMetadata,
+  META,
   findImportedItem,
   getAmbaOwnedItems,
   getImportedEncounterItems,
@@ -530,6 +531,11 @@ async function buildMonsterStagingItems({
         if (makeTokenArt && tokenImage.artToken) onStatus(`Token art rendered for ${label} ${name}.`);
         if (makeTokenArt && tokenArtUrl && !tokenImage.artToken) onStatus(`Token art failed for ${label} ${name}; using label token.`);
         const useArtToken = tokenImage.artToken;
+        if (!useArtToken) {
+          metadata[META.color] = color;
+          if (glyphColors?.fill) metadata[META.glyphFill] = glyphColors.fill;
+          if (glyphColors?.stroke) metadata[META.glyphStroke] = glyphColors.stroke;
+        }
         const builder = buildImage(tokenImage.image, tokenImage.grid)
           .name(`${label} ${name}`)
           .description(monsterItemDescription("token", name, block))

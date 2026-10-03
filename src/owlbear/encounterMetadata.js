@@ -9,6 +9,9 @@ export const META = {
   sourceId: `${NS}/sourceId`,
   monsterId: `${NS}/monsterId`,
   tokenInstanceId: `${NS}/tokenInstanceId`,
+  color: `${NS}/color`,
+  glyphFill: `${NS}/glyphFill`,
+  glyphStroke: `${NS}/glyphStroke`,
 };
 
 export function encounterItemMetadata({
