@@ -319,6 +319,7 @@ async function resolveMonsterGroups(encounter, onStatus = () => {}) {
       const displayName = looked?.name || identity.name || "Monster";
       group.block.resolvedName = displayName;
       if (looked?.statBlock) group.block.resolvedStatBlock = looked.statBlock;
+      if (looked?.statCardMonster) group.block.statCardMonster = looked.statCardMonster;
       if (looked?.level != null) group.block.level = looked.level;
       if (looked?.source) group.block.source = looked.source;
       if (looked?.size) group.block.size = looked.size;

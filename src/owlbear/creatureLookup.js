@@ -159,6 +159,10 @@ export function sourceUrlFromLocalRow(row) {
   return null;
 }
 
+function statBlockFromLocalRow(row) {
+  return row?.RawMD ?? row?.rawMD ?? row?.statBlock ?? row?.rawStatBlock ?? null;
+}
+
 async function lookupLocalMonsterRow(name, aonId = null) {
   const query = String(name ?? "").trim();
   if (!query) return null;
@@ -179,13 +183,16 @@ async function withLocalMonsterArt(result, fallbackName = "") {
     if (!row) continue;
     const imageUrl = merged?.imageUrl || artUrlFromLocalRow(row);
     const sourceUrl = merged?.sourceUrl || sourceUrlFromLocalRow(row);
-    if (!imageUrl && !sourceUrl) continue;
+    const statBlock = merged?.statBlock || statBlockFromLocalRow(row);
+    if (!imageUrl && !sourceUrl && !statBlock && !row) continue;
     merged = {
       ...(merged ?? { name: lookupName }),
       ...(imageUrl ? { imageUrl } : {}),
       ...(sourceUrl ? { sourceUrl } : {}),
+      ...(statBlock ? { statBlock } : {}),
+      statCardMonster: row,
     };
-    if (imageUrl && sourceUrl) return merged;
+    if (imageUrl && sourceUrl && merged.statCardMonster) return merged;
   }
 
   return merged;

@@ -8,7 +8,7 @@
     "dev:owlbear": "vite --host 0.0.0.0 --port 5196",
     "build": "vite build",
     "preview": "vite preview",
-    "test:statcards": "node --test src/owlbear/statCardModel.test.js src/owlbear/statCardRows.test.js src/owlbear/statCardImage.test.js",
+    "test:statcards": "node --test src/owlbear/statCardModel.test.js src/owlbear/statCardRows.test.js src/owlbear/statCardImage.test.js src/owlbear/creatureLookup.test.js",
     "test:statcards:visual": "node --test src/owlbear/statCardVisual.test.js",
     "test:statcards:all": "npm run test:statcards && npm run test:statcards:visual",
     "validate:statcards": "node scripts/validate-stat-cards.mjs"
