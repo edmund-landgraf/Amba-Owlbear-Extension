@@ -39,3 +39,21 @@ Art tokens do not get these three keys. The palette is not copied onto scene-lev
 ### PC tokens
 
 Written in `src/owlbear/pcImporter.js` as `com.adventuremakerbyact.owlbear/color` (literal key, not the encounter `META` helper). Value is `NOTE_COLORS[index % 8]`. Later sheet/snapshot code reads that key, then falls back to the same roster index.
+
+For scene PC tokens, `buildPcTokenAndNoteItems()` writes Owlbear accessibility fields separately from the palette color:
+
+| Owlbear field | Value |
+| --- | --- |
+| `name` | PC name |
+| `plainText` | PC name |
+| `description` | `AMBA generated token for ${pc.name}` |
+
+The palette color is not stored in those visible/accessibility fields. It is on the same scene image item under metadata key `com.adventuremakerbyact.owlbear/color`, using the `NS` namespace from `src/owlbear/layout.js`. The same metadata object also includes `com.adventuremakerbyact.owlbear/moduleId`, `com.adventuremakerbyact.owlbear/pcId`, and `com.adventuremakerbyact.owlbear/kind: "pc-token"`.
+
+`buildPcTokenAndNoteItems()` passes the roster color into `tokenInfo()`. Generated first-letter PC tokens use that color in the token art; portrait-backed tokens can use portrait art instead, but the metadata color is still written so later sheet/snapshot placement can keep the roster color.
+
+### Characters-library generated PC token uploads
+
+`generatedTokenUpload()` in `src/owlbear/pcAssets.js` creates an Owlbear Characters-library upload with the same `name` and `plainText` values as the scene token, and with a longer description: `AMBA generated token for ${pc.name} from ${moduleTitle}`.
+
+That upload does not set the metadata color key. It stores the chosen color only as hidden text styling with `textFillColor(color)` and `textFillOpacity(0)`, so later code cannot read the color from AMBA metadata. A later reader would need to recover it from the uploaded image/SVG/PNG content or from the hidden text styling if Owlbear exposes it.
