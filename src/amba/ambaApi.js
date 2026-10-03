@@ -176,13 +176,13 @@ function normalizeEncounterContainer(container) {
     sceneName,
     map: mergeEncounterMap(container),
     mapUrl: metadata.mapUrl ?? container.mapUrl,
-    monsterBlocks:
-      metadata.monsterBlocks ??
-      metadata.monsters ??
-      container.monsterBlocks ??
-      container.monsters ??
-      (monsterArtifacts.length ? monsterArtifacts.map(monsterBlockFromArtifact) : null) ??
-      [],
+    monsterBlocks: monsterArtifacts.length
+      ? monsterArtifacts.map(monsterBlockFromArtifact)
+      : metadata.monsterBlocks ??
+        metadata.monsters ??
+        container.monsterBlocks ??
+        container.monsters ??
+        [],
   };
 }
 
