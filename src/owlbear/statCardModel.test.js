@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { rawMdStatCardModel, statCardRowsFromModel, structuredStatCardModel } from "./statCardModel.js";
+import { apiStatCardModel, rawMdStatCardModel, statCardRowsFromModel, structuredStatCardModel } from "./statCardModel.js";
 import { renderStatCardSvgFile } from "./statCardImage.js";
 
 const SEA_HAG = [
@@ -89,6 +90,75 @@ test("structured PF2 API rows normalize direct fields", () => {
   assert.deepEqual(model.traits, ["Common", "Medium", "Merfolk"]);
   assert.equal(rows.find((row) => row.label === "Perception")?.value, "+4; low-light vision");
   assert.equal(rows.find((row) => row.label === "AC")?.value, "16; Fort +4, Ref +7, Will +6");
+});
+
+test("API stat cards keep markdown fields the structured columns shorten", () => {
+  const row = JSON.parse(readFileSync(new URL("./fixtures/statCards/amoeba-swarm.input.json", import.meta.url), "utf8"));
+  const rows = statCardRowsFromModel(apiStatCardModel(row));
+
+  assert.equal(rows.find((entry) => entry.label === "Skills")?.value, "Stealth +1");
+  assert.equal(rows.find((entry) => entry.label === "Weaknesses")?.value, "area 3, fire 3, splash damage 3");
+  assert.ok(rows.some((entry) => entry.label === "Weak Acid"));
+});
+
+test("API stat cards keep troop segments, thresholds, and defenses from markdown", () => {
+  const row = {
+    Name: "Goblin Rabble",
+    Level: 4,
+    Rarity: "common",
+    Size: "gargantuan",
+    Family: "goblin",
+    Perception: 11,
+    Senses: "darkvision",
+    Languages: "Common, Goblin",
+    Skills: "Acrobatics, Athletics, Stealth, Thievery",
+    StrMod: 1,
+    DexMod: 5,
+    ConMod: 2,
+    IntMod: 0,
+    WisMod: 1,
+    ChaMod: 1,
+    AC: 20,
+    Fortitude: 11,
+    Reflex: 14,
+    Will: 8,
+    HP: 60,
+    Weaknesses: "{\"area\": 4}",
+    Speed: "30 feet, troop movement",
+    RawMD: [
+      "## Goblin Rabble Creature 4",
+      "- Gargantuan",
+      "- Goblin",
+      "- Humanoid",
+      "- Troop",
+      "**Perception** +11; darkvision",
+      "**Languages** Common, Goblin",
+      "**Skills** Acrobatics +12, Athletics +10, Stealth +12, Thievery +12",
+      "**Str** +1",
+      "**Dex** +5",
+      "**Con** +2",
+      "**Int** +0",
+      "**Wis** +1",
+      "**Cha** +1",
+      "**AC** 20",
+      "**Fort** +11",
+      "**Ref** +14",
+      "**Will** +8",
+      "**HP** 60 (4 segments); Thresholds 40 (3 segments), 20 (2 segments)",
+      "**Weaknesses** area damage 4, splash damage 4",
+      "**Troop Defenses** When the troop is reduced to 0 Hit Points, it disperses.",
+      "**Speed** 30 feet, troop movement",
+    ].join("\n"),
+  };
+  const model = apiStatCardModel(row);
+  const rows = statCardRowsFromModel(model);
+
+  assert.ok(model.traits.includes("Humanoid"));
+  assert.ok(model.traits.includes("Troop"));
+  assert.equal(rows.find((entry) => entry.label === "Skills")?.value, "Acrobatics +12, Athletics +10, Stealth +12, Thievery +12");
+  assert.equal(rows.find((entry) => entry.label === "HP")?.value, "60 (4 segments); Thresholds 40 (3 segments), 20 (2 segments)");
+  assert.equal(rows.find((entry) => entry.label === "Weaknesses")?.value, "area damage 4, splash damage 4");
+  assert.match(rows.find((entry) => entry.label === "Troop Defenses")?.value ?? "", /disperses/);
 });
 
 test("stat card SVG renders PF2 anchors and dynamic dimensions", async () => {

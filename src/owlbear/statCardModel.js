@@ -106,12 +106,32 @@ export function structuredStatCardModel(row) {
   return model(row?.Name ?? row?.name, Number.isFinite(Number(level)) ? `Creature ${level}` : "", traits, [sourceBook, sourcePage ? `pg. ${sourcePage}` : ""].filter(Boolean).join(" "), rows);
 }
 
+function mergeTraits(primary, secondary) {
+  const seen = new Set();
+  const traits = [];
+  for (const trait of [...primary, ...secondary]) {
+    const key = String(trait ?? "").toLocaleLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    traits.push(trait);
+  }
+  return traits;
+}
+
 export function apiStatCardModel(row) {
   const structured = structuredStatCardModel(row);
   const raw = rawMdStatCardModel(row?.RawMD ?? row?.rawMD, row?.Name ?? row?.name);
   if (!raw.rows.length) return structured;
-  const details = raw.rows.filter((entry) => entry.kind !== "field" || ["Melee", "Ranged"].includes(entry.label) || /\bSpells$/i.test(entry.label));
-  return { ...structured, rows: [...structured.rows, ...details] };
+  const rawLabels = new Set(raw.rows.map((entry) => entry.label));
+  const missing = structured.rows.filter((entry) => !rawLabels.has(entry.label));
+  return {
+    ...structured,
+    name: raw.name || structured.name,
+    creature: raw.creature || structured.creature,
+    traits: mergeTraits(raw.traits, structured.traits),
+    source: raw.source || structured.source,
+    rows: [...raw.rows, ...missing],
+  };
 }
 
 function rawCreatureStart(lines) {
