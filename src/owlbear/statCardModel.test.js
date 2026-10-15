@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { apiStatCardModel, rawMdStatCardModel, statCardRowsFromModel, structuredStatCardModel } from "./statCardModel.js";
+import { apiStatCardModel, mergeStatRows, rawMdStatCardModel, statCardRowsFromModel, structuredStatCardModel } from "./statCardModel.js";
 import { renderStatCardSvgFile } from "./statCardImage.js";
 
 const SEA_HAG = [
@@ -99,6 +99,53 @@ test("API stat cards keep markdown fields the structured columns shorten", () =>
   assert.equal(rows.find((entry) => entry.label === "Skills")?.value, "Stealth +1");
   assert.equal(rows.find((entry) => entry.label === "Weaknesses")?.value, "area 3, fire 3, splash damage 3");
   assert.ok(rows.some((entry) => entry.label === "Weak Acid"));
+});
+
+test("API stat cards use extra markdown when RawMD is missing", () => {
+  const rows = statCardRowsFromModel(
+    apiStatCardModel(
+      {
+        Name: "Goblin Rabble",
+        Level: 4,
+        Skills: "Acrobatics, Athletics",
+        HP: 60,
+        Weaknesses: "{\"area\": 4}",
+      },
+      [
+        "## Goblin Rabble Creature 4",
+        "**Skills** Acrobatics +12, Athletics +10",
+        "**HP** 60 (4 segments); Thresholds 40 (3 segments), 20 (2 segments)",
+        "**Weaknesses** area damage 4, splash damage 4",
+        "**Troop Defenses** The troop disperses.",
+      ].join("\n")
+    )
+  );
+
+  assert.equal(rows.find((entry) => entry.label === "Skills")?.value, "Acrobatics +12, Athletics +10");
+  assert.equal(rows.find((entry) => entry.label === "HP")?.value, "60 (4 segments); Thresholds 40 (3 segments), 20 (2 segments)");
+  assert.equal(rows.find((entry) => entry.label === "Weaknesses")?.value, "area damage 4, splash damage 4");
+  assert.match(rows.find((entry) => entry.label === "Troop Defenses")?.value ?? "", /disperses/);
+});
+
+test("merged stat rows keep the longer field text", () => {
+  const rows = mergeStatRows(
+    [{ label: "Skills", value: "Stealth" }, { label: "HP", value: "60" }],
+    [{ label: "Skills", value: "Stealth +1" }, { label: "HP", value: "60 (4 segments)" }, { label: "Troop Defenses", value: "disperses" }]
+  );
+  assert.equal(rows.find((entry) => entry.label === "Skills")?.value, "Stealth +1");
+  assert.equal(rows.find((entry) => entry.label === "HP")?.value, "60 (4 segments)");
+  assert.equal(rows.find((entry) => entry.label === "Troop Defenses")?.value, "disperses");
+});
+
+test("raw markdown creature headers can be HTML or unhashed", () => {
+  const html = rawMdStatCardModel(
+    "<h2>Sea Hag Creature 3</h2>\n<strong>Skills</strong> Occultism +8\n<strong>HP</strong> 45",
+    "Sea Hag"
+  );
+  const plain = rawMdStatCardModel("Sea Hag Creature 3\n**Skills** Occultism +8\n**HP** 45", "Sea Hag");
+  assert.equal(html.creature, "Creature 3");
+  assert.equal(html.rows.find((row) => row.label === "Skills")?.value, "Occultism +8");
+  assert.equal(plain.rows.find((row) => row.label === "HP")?.value, "45");
 });
 
 test("API stat cards keep troop segments, thresholds, and defenses from markdown", () => {

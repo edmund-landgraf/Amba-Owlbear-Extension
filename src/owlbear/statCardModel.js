@@ -118,24 +118,81 @@ function mergeTraits(primary, secondary) {
   return traits;
 }
 
-export function apiStatCardModel(row) {
+function markdownCandidates(row, extraMarkdown) {
+  return [row?.RawMD, row?.rawMD, extraMarkdown, row?.statBlock, row?.rawStatBlock]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+}
+
+function richerValue(left, right) {
+  const a = tidyStatValue(left);
+  const b = tidyStatValue(right);
+  if (!a) return b;
+  if (!b) return a;
+  return b.length > a.length ? b : a;
+}
+
+export function mergeStatRows(...lists) {
+  const order = [];
+  const byLabel = new Map();
+  const unlabeled = [];
+  for (const list of lists) {
+    for (const row of list ?? []) {
+      if (!row?.label) {
+        unlabeled.push(row);
+        continue;
+      }
+      if (!byLabel.has(row.label)) {
+        order.push(row.label);
+        byLabel.set(row.label, { ...row });
+        continue;
+      }
+      const current = byLabel.get(row.label);
+      byLabel.set(row.label, { ...current, ...row, value: richerValue(current.value, row.value) });
+    }
+  }
+  return [...order.map((label) => byLabel.get(label)), ...unlabeled];
+}
+
+function bestRawModel(row, extraMarkdown) {
+  const name = row?.Name ?? row?.name;
+  let best = model(name, "", [], "", []);
+  for (const source of markdownCandidates(row, extraMarkdown)) {
+    const parsed = rawMdStatCardModel(source, name);
+    if (parsed.rows.length > best.rows.length) best = parsed;
+  }
+  return best;
+}
+
+export function apiStatCardModel(row, extraMarkdown) {
   const structured = structuredStatCardModel(row);
-  const raw = rawMdStatCardModel(row?.RawMD ?? row?.rawMD, row?.Name ?? row?.name);
+  const raw = bestRawModel(row, extraMarkdown);
   if (!raw.rows.length) return structured;
-  const rawLabels = new Set(raw.rows.map((entry) => entry.label));
-  const missing = structured.rows.filter((entry) => !rawLabels.has(entry.label));
   return {
     ...structured,
     name: raw.name || structured.name,
     creature: raw.creature || structured.creature,
     traits: mergeTraits(raw.traits, structured.traits),
     source: raw.source || structured.source,
-    rows: [...raw.rows, ...missing],
+    rows: mergeStatRows(raw.rows, structured.rows),
   };
 }
 
+function normalizeRawMd(rawMd) {
+  return String(rawMd ?? "")
+    .replace(/\r/g, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<h[1-3][^>]*>/gi, "\n### ")
+    .replace(/<\/?(?:strong|b)>/gi, "**")
+    .replace(/<li[^>]*>/gi, "\n- ");
+}
+
 function rawCreatureStart(lines) {
-  return lines.findIndex((line) => /^#{1,3}\s+.*\bCreature\s+[-+]?\d+\b/i.test(line));
+  return lines.findIndex((line) => {
+    const stripped = line.replace(/<[^>]+>/g, " ").replace(/^#{1,3}\s+/, "").trim();
+    return stripped.length <= 160 && /\bCreature\s+[-+]?\d+\b/i.test(stripped);
+  });
 }
 
 function actionKind(rest) {
@@ -151,7 +208,7 @@ function parseHeader(line, fallbackName) {
 }
 
 export function rawMdStatCardModel(rawMd, fallbackName) {
-  const lines = String(rawMd ?? "").replace(/\r/g, "").split("\n");
+  const lines = normalizeRawMd(rawMd).split("\n");
   const start = rawCreatureStart(lines);
   if (start < 0) return model(fallbackName, "", [], "", []);
   const header = parseHeader(lines[start], fallbackName);

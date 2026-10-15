@@ -4,7 +4,7 @@ import { publishTokenPng } from "./tokenHost.js";
 import { rasterizedMonsterArtTokenFile, rasterizedMonsterTokenFile } from "./tokenImage.js";
 import { renderStatCardSvgFile } from "./statCardImage.js";
 import { cleanStatText, pf2eStatRows } from "./statCardRows.js";
-import { apiStatCardModel, rawMdStatCardModel, statCardRowsFromModel } from "./statCardModel.js";
+import { apiStatCardModel, mergeStatRows, rawMdStatCardModel, statCardRowsFromModel } from "./statCardModel.js";
 import { inferMapGrid } from "./mapGridInference.js";
 import { addItemsToCurrentScene, deleteItemsFromCurrentScene, moveItemsInCurrentScene, unlockAmbaStatCardsInCurrentScene, unlockItemsInCurrentScene } from "./sceneItems.js";
 import { currentOwlbearSceneId, requireOpenScene } from "./sceneService.js";
@@ -73,9 +73,11 @@ function statCardContent(block, { name, count, variant } = {}) {
   const quantity = count ?? monsterCount(block);
   const rawStatBlock = monsterStatBlock(block);
   const model = block?.statCardMonster
-    ? apiStatCardModel(block.statCardMonster)
+    ? apiStatCardModel(block.statCardMonster, rawStatBlock)
     : rawMdStatCardModel(rawStatBlock, displayName);
-  const rows = (model.rows.length ? statCardRowsFromModel(model) : pf2eStatRows(rawStatBlock, displayName)).filter(
+  const fromModel = model.rows.length ? statCardRowsFromModel(model) : [];
+  const fromText = pf2eStatRows(rawStatBlock, displayName);
+  const rows = mergeStatRows(fromText, fromModel).filter(
     (row) => row.label !== "Type" || !isNoiseTypeRow(row.value)
   );
   const meta = [block.level ? `Level ${block.level}` : "", block.source ? `Source: ${block.source}` : "", block.sourceUrl ?? ""]
@@ -302,7 +304,7 @@ async function resolveMonsterGroups(encounter, onStatus = () => {}) {
   onStatus(`Resolving ${groups.length} monster type${groups.length === 1 ? "" : "s"}...`);
   await Promise.all(
     groups.map(async (group) => {
-      if (group.block?.resolvedStatBlock) {
+      if (group.block?.resolvedStatBlock && group.block?.statCardMonster) {
         const displayName = group.block.resolvedName || monsterName(group.block) || "Monster";
         group.displayName = displayName;
         group.variant = group.block.resolvedVariant ?? "normal";
