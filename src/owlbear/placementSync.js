@@ -1,4 +1,5 @@
 import { saveOwlbearPlacements } from "../amba/ambaApi.js";
+import { EXPORT_SCHEMA_VERSION, validateExportDocument } from "./exportSchema.js";
 import { encounterId } from "./encounterData.js";
 import { getImportedEncounterItems, META } from "./encounterMetadata.js";
 
@@ -11,6 +12,7 @@ function sourceUrlFromItem(item) {
 function placementFromItem(item) {
   const metadata = item.metadata ?? {};
   return {
+    tokenKey: metadata[META.tokenKey],
     owlbearItemId: item.id,
     kind: metadata[META.kind],
     sourceId: metadata[META.sourceId],
@@ -40,13 +42,33 @@ export async function saveEncounterPlacementsToAmba({ moduleId, encounter }) {
     throw new Error("No imported AMBA map or monster tokens were found in the current Owlbear scene.");
   }
 
-  await saveOwlbearPlacements(moduleId, id, {
+  const document = {
+    schemaVersion: EXPORT_SCHEMA_VERSION,
+    idempotencyKey: `${moduleId}:${id}:placements`,
+    moduleId,
+    encounterId: id,
     scene: {
       encounterId: id,
       title: encounter.title ?? encounter.name,
     },
-    placements,
-  });
+    placements: placements.map((placement) => ({
+      tokenKey: placement.tokenKey,
+      owlbearItemId: placement.owlbearItemId,
+      kind: placement.kind,
+      sourceId: placement.sourceId,
+      monsterId: placement.monsterId,
+      tokenInstanceId: placement.tokenInstanceId,
+      name: placement.name,
+      layer: placement.layer,
+      position: placement.position,
+      rotation: placement.rotation,
+      scale: placement.scale,
+    })),
+  };
+  const validation = validateExportDocument(document);
+  if (!validation.ok) throw new Error(validation.errors.join(" "));
+
+  await saveOwlbearPlacements(moduleId, id, document);
 
   return placements.length;
 }

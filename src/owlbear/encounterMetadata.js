@@ -9,6 +9,7 @@ export const META = {
   sourceId: `${NS}/sourceId`,
   monsterId: `${NS}/monsterId`,
   tokenInstanceId: `${NS}/tokenInstanceId`,
+  tokenKey: `${NS}/tokenKey`,
   color: `${NS}/color`,
   glyphFill: `${NS}/glyphFill`,
   glyphStroke: `${NS}/glyphStroke`,
@@ -21,6 +22,7 @@ export function encounterItemMetadata({
   sourceId,
   monsterId,
   tokenInstanceId,
+  tokenKey,
 }) {
   return {
     [META.moduleId]: moduleId,
@@ -29,6 +31,7 @@ export function encounterItemMetadata({
     ...(sourceId ? { [META.sourceId]: sourceId } : {}),
     ...(monsterId ? { [META.monsterId]: monsterId } : {}),
     ...(tokenInstanceId ? { [META.tokenInstanceId]: tokenInstanceId } : {}),
+    ...(tokenKey ? { [META.tokenKey]: tokenKey } : {}),
   };
 }
 
@@ -36,10 +39,12 @@ export function hasEncounterIdentity(item, moduleId, encounterId) {
   return item.metadata?.[META.moduleId] === moduleId && item.metadata?.[META.encounterId] === encounterId;
 }
 
-export function findImportedItem(items, { kind, sourceId, tokenInstanceId }) {
+export function findImportedItem(items, { kind, sourceId, tokenInstanceId, tokenKey }) {
   return items.find((item) => {
     const metadata = item.metadata ?? {};
     if (metadata[META.kind] !== kind) return false;
+    if (tokenKey && metadata[META.tokenKey] === tokenKey) return true;
+    if (tokenKey && metadata[META.tokenKey]) return false;
     if (sourceId && metadata[META.sourceId] !== sourceId) return false;
     if (tokenInstanceId && metadata[META.tokenInstanceId] !== tokenInstanceId) return false;
     return true;

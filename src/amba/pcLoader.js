@@ -147,7 +147,9 @@ export async function wirePcLoader() {
 
     // Prefer the purpose-built no-PC Owlbear smoke module when present, then
     // fall back to the first module with PCs for the older importer flow.
-    const smokeModule = modules.find((module) => /owlbear smoke/i.test(module.title));
+    const smokeModule = import.meta.env.DEV
+      ? modules.find((module) => /owlbear smoke/i.test(module.title))
+      : undefined;
     const firstModuleWithPcs = modules.find((module) => module._count.pcs > 0);
     if (smokeModule || firstModuleWithPcs) {
       modulePicker.value = (smokeModule ?? firstModuleWithPcs).id;

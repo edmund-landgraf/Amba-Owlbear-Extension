@@ -149,13 +149,14 @@ export function savedMapPlacement(encounter) {
   );
 }
 
-export function savedTokenPlacement(encounter, tokenInstanceId) {
+export function savedTokenPlacement(encounter, tokenInstanceId, tokenKey) {
+  const placements = encounterPlacements(encounter).filter((placement) => placement?.kind === "monster-token");
+  if (tokenKey) {
+    const byKey = placements.find((placement) => placement?.tokenKey === tokenKey);
+    if (byKey) return byKey;
+  }
   if (!tokenInstanceId) return null;
-  return (
-    encounterPlacements(encounter).find(
-      (placement) => placement?.kind === "monster-token" && placement?.tokenInstanceId === tokenInstanceId
-    ) ?? null
-  );
+  return placements.find((placement) => placement?.tokenInstanceId === tokenInstanceId) ?? null;
 }
 
 export function monsterBlocks(encounter) {

@@ -54,6 +54,7 @@ function isDevReadableFallback(error) {
 }
 
 async function fallbackToDevSmoke(moduleId, error) {
+  if (!env.DEV) throw error;
   const smoke = devSmokeEncounters(moduleId);
   if (smoke && (isMissingEndpoint(error) || isDevReadableFallback(error))) return smoke;
   throw error;
@@ -484,7 +485,7 @@ export function getEncounter(moduleId, encounterId) {
     const container = await getJson(
       `/api/modules/${encodeURIComponent(moduleId)}/containers/${encodeURIComponent(encounterId)}`
     ).catch((fallbackError) => {
-      const smoke = devSmokeEncounter(moduleId, encounterId);
+      const smoke = env.DEV ? devSmokeEncounter(moduleId, encounterId) : null;
       if (smoke && (isMissingEndpoint(fallbackError) || isDevReadableFallback(fallbackError))) {
         return smoke;
       }
